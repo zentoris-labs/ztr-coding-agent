@@ -190,13 +190,24 @@ tailscale ssh root@ztr-agent-host-01    # MagicDNS resolves the name
 
 ### Step 5 — Configure your first agent
 
-Still on the host (now reachable via `tailscale ssh root@ztr-agent-host-01`):
+You need to edit two files on the host: `.env.<initials>` (per-developer secrets)
+and `docker-compose.yml` (replace placeholders with your initials).
+
+**Recommended: edit via VS Code Remote-SSH** (much nicer than nano-over-SSH for
+multi-line files):
+
+1. Install the "Remote - SSH" extension in VS Code (`ms-vscode-remote.remote-ssh`).
+2. `Ctrl+Shift+P` → "Remote-SSH: Connect to Host…" → type `root@ztr-agent-host-01` and hit Enter.
+3. A new VS Code window opens, connected to the host over Tailscale. First connect downloads a ~150MB vscode-server to the host; subsequent connects are instant.
+4. `File → Open Folder…` → `/opt/ztr-coding-agent`. You'll see `docker-compose.yml` and `.env.example` in the explorer.
+
+> Tip: drop a `Host ztr-agent-host-01\n  User root` block in `~/.ssh/config` on your laptop — then VS Code's host picker shows the friendly name directly.
+
+**Alternative: edit in the terminal** with `nano` or `vim` after `tailscale ssh root@ztr-agent-host-01`:
 
 ```bash
 cd /opt/ztr-coding-agent
-
-# Make your per-developer env file (replace `xx` with your initials)
-cp .env.example .env.xx
+cp .env.example .env.xx       # replace xx with your initials
 nano .env.xx
 ```
 
@@ -231,11 +242,7 @@ AGENT_ENABLE_DOCKER=1
 AGENT_REPOS=
 ```
 
-Then customize the compose file — replace every `xx` with your initials:
-
-```bash
-nano docker-compose.yml
-```
+Then customize the compose file — replace every `xx` with your initials (use VS Code's find-and-replace, or `nano docker-compose.yml` in the terminal):
 
 Change:
 - `agent-xx-01` → `agent-<your-initials>-01` (8 occurrences)
@@ -275,12 +282,29 @@ Claude Code Desktop's SSH connector: host = `agent-<your-initials>-01`, user = `
 
 | Action | Command |
 |---|---|
-| Add another agent slot (yourself) | Duplicate the service + volume block in `docker-compose.yml` (incrementing `01` → `02`), generate a fresh `tag:agent-<you>` auth key, paste into a second `.env.xx` if you want different env per slot, then `docker compose up -d` |
+| Add another agent slot for yourself | Duplicate the service + volume block in `docker-compose.yml` (`01` → `02`), use a **reusable** `tag:agent-<you>` auth key in `.env.<you>` so multiple containers can share it, then `docker compose up -d`. See "Scaling agents per developer" below for the full pattern. |
 | Onboard a new developer | Add their email + new tag to ACL policy, they generate their own keys, drop their `.env.<their-initials>` next to yours, append their service to compose |
 | Restart an agent | `docker compose restart agent-xx-01` |
 | Tear it down | `docker compose down` (keeps volumes) or `docker compose down -v` (wipes state) |
 | Upgrade the image | `docker compose pull && docker compose up -d` |
 | Tear down the host VM | `hcloud server delete ztr-agent-host-01` |
+
+### Scaling agents per developer
+
+To run multiple agent slots for the same person (e.g. `agent-ch-01`,
+`agent-ch-02`, `agent-ch-03` so you can work on several tasks in parallel):
+
+1. Generate a **reusable** auth key at [admin/settings/keys](https://login.tailscale.com/admin/settings/keys) — reusable: on, ephemeral: off, tag: `tag:agent-<initials>`. Single-use keys burn on first registration, so only one of your N agents would succeed.
+2. Replace `TS_AUTHKEY` in `.env.<initials>` with the reusable key.
+3. Duplicate the service block in `docker-compose.yml` per additional slot:
+   - `agent-<owner>-01` → `agent-<owner>-02`, `agent-<owner>-03`, ...
+   - matching `container_name`, `hostname`, `AGENT_ID`, and volume prefixes
+   - same `env_file: .env.<initials>` for all of them (shared secrets)
+4. Add the matching `volumes:` entries at the bottom (4 volumes per agent: `-workspace`, `-home`, `-ssh-keys`, `-tailscale`).
+5. `docker compose up -d`. The new agents register with the reusable key and appear on your tailnet as new nodes.
+
+Each slot is independent: its own workspace, its own home, its own
+Claude Code state. Useful for "one agent per concurrent task" workflows.
 
 ---
 
