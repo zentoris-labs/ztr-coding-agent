@@ -6,10 +6,13 @@
 # and pre-pulls the GHCR image. Optionally joins the host to your tailnet
 # with Tailscale SSH enabled (set HOST_TS_AUTHKEY before invoking).
 #
-# Usage (one-shot install from GitHub):
-#   ssh root@<host> 'curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash'
+# Usage (recommended — SSH in first, then run on the host):
+#   ssh root@<host>
+#   # then on the host:
+#   export HOST_TS_AUTHKEY=tskey-auth-xxxx
+#   curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
 #
-# Usage (with Tailscale auto-join):
+# Alternate (one-shot pipe from your laptop):
 #   ssh root@<host> "HOST_TS_AUTHKEY=tskey-auth-xxxx bash -s" < infra/bootstrap.sh
 
 set -euo pipefail

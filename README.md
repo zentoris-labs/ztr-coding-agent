@@ -14,12 +14,15 @@ The published image lives at **`ghcr.io/zentoris-labs/ztr-coding-agent`** (publi
 
 1. **Create a Linux host.** Ubuntu 24.04 with outbound internet access.
    No inbound ports required — Tailscale handles connectivity.
-2. **Run the bootstrap on the host:**
+2. **SSH to the host and run the bootstrap there:**
    ```bash
-   ssh root@<host> "HOST_TS_AUTHKEY=tskey-auth-xxx bash -s" \
-       < <(curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh)
+   ssh root@<host>
+
+   # Then on the host:
+   export HOST_TS_AUTHKEY=tskey-auth-xxx
+   curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
    ```
-   Installs Docker, sysbox-runc, Tailscale (joined to your tailnet), pre-pulls the image.
+   Installs Docker, sysbox-runc, Tailscale (joined to your tailnet), pre-pulls the image, and fetches `docker-compose.yml` + `.env.example` to `/opt/ztr-coding-agent/`.
 3. **Write a per-host `docker-compose.yml`** listing the agents that machine
    hosts, plus per-developer `.env.<initials>` files with each owner's
    `TS_AUTHKEY` + tokens + SSH credentials. Lives on the host or in a private

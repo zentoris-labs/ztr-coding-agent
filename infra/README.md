@@ -34,14 +34,21 @@ up, all management traffic flows over the tailnet.
 
 ### 2. Run the bootstrap on the host
 
-Get a Tailscale auth key (single-use, optionally tagged) from
+Get a Tailscale auth key (single-use, tagged `tag:agent-host`) from
 [login.tailscale.com/admin/settings/keys](https://login.tailscale.com/admin/settings/keys).
-Then:
+Then SSH in and run the bootstrap there:
 
 ```bash
-ssh root@<host> "HOST_TS_AUTHKEY=tskey-auth-xxxxx bash -s" \
-    < <(curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh)
+ssh root@<host>
+
+# Then on the host:
+export HOST_TS_AUTHKEY=tskey-auth-xxxxx
+curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
 ```
+
+(If you prefer one-shot, you can also pipe the script via SSH stdin from
+your laptop — but the SSH-then-run pattern above is the supported flow
+and lets you watch the output live.)
 
 The script installs:
 
