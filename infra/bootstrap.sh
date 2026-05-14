@@ -33,7 +33,7 @@ export DEBIAN_FRONTEND=noninteractive
 log "apt update"
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    ca-certificates curl gnupg git jq vim tmux htop
+    ca-certificates curl gnupg git jq nano vim tmux htop
 
 # --- 2. Docker CE (skip if already installed) ---
 if ! command -v docker >/dev/null 2>&1; then
@@ -152,7 +152,7 @@ log "next steps (all on this host, in ${WORKDIR}/):"
 log "  1. If tailscale not joined yet:  tailscale up --ssh"
 log "  2. Per developer, copy .env.example -> .env.<initials> and fill in"
 log "     their TS_AUTHKEY, GITHUB_TOKEN, ANTHROPIC_API_KEY, SSH_PASSWORD, etc."
-log "     example:  cp .env.example .env.al && \$EDITOR .env.al"
+log "     example:  cp .env.example .env.al && nano .env.al"
 log "  3. Edit docker-compose.yml: replace 'xx' placeholders with the owner's"
 log "     initials. Duplicate the service block per agent if multiple developers."
 log "  4. docker compose up -d"

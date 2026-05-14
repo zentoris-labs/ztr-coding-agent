@@ -83,11 +83,11 @@ cd /opt/ztr-coding-agent
 
 # 3a. Create one .env file per developer who runs an agent on this host
 cp .env.example .env.al               # for Alice
-$EDITOR .env.al                       # fill in TS_AUTHKEY, GITHUB_TOKEN, ...
+nano .env.al                       # fill in TS_AUTHKEY, GITHUB_TOKEN, ...
 
 # 3b. Edit docker-compose.yml — replace every `xx` with the owner's initials.
 #     For multiple developers, duplicate the service block + volume entries.
-$EDITOR docker-compose.yml
+nano docker-compose.yml
 ```
 
 **Naming convention:** each agent has the form `agent-<owner>-<NN>` where

@@ -197,7 +197,7 @@ cd /opt/ztr-coding-agent
 
 # Make your per-developer env file (replace `xx` with your initials)
 cp .env.example .env.xx
-$EDITOR .env.xx
+nano .env.xx
 ```
 
 Fill in `.env.xx`:
@@ -234,7 +234,7 @@ AGENT_REPOS=
 Then customize the compose file — replace every `xx` with your initials:
 
 ```bash
-$EDITOR docker-compose.yml
+nano docker-compose.yml
 ```
 
 Change:
