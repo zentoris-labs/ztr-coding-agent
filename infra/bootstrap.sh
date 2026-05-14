@@ -18,9 +18,16 @@ set -euo pipefail
 
 log() { printf '[bootstrap] %s\n' "$*" >&2; }
 
-SYSBOX_VERSION="${SYSBOX_VERSION:-0.6.7}"
 WORKDIR="${WORKDIR:-/opt/ztr-coding-agent}"
 IMAGE="${IMAGE:-ghcr.io/zentoris-labs/ztr-coding-agent:latest}"
+
+# sysbox: built from master commit until 0.7.1 ships. All released versions
+# (≤ 0.7.0) are missing time-namespace support in sysbox-runc, breaking on
+# Docker 27.x+/containerd 2.x with `namespace {"time" ""} does not exist`.
+# Fix landed on master 2026-05-12 (sysbox-runc commit cf83133d).
+# When 0.7.1 (or whatever's next) is released, replace this with the .deb path.
+SYSBOX_COMMIT="${SYSBOX_COMMIT:-31c20d269de77ae190bd0ff8c35988af239f89d1}"
+SYSBOX_RUNC_FIX_COMMIT="cf83133d16ba775f163a5f9b841e3e2fd29c0ed0"
 
 if [[ $EUID -ne 0 ]]; then
     log "ERROR: must run as root (try: sudo bash $0)"
@@ -53,16 +60,33 @@ else
     log "docker already installed ($(docker --version))"
 fi
 
-# --- 3. sysbox-ce (skip if already installed) ---
-if ! command -v sysbox-runc >/dev/null 2>&1; then
-    log "installing sysbox-ce ${SYSBOX_VERSION}"
-    cd /tmp
-    curl -fsSL -o sysbox-ce.deb \
-        "https://downloads.nestybox.com/sysbox/releases/v${SYSBOX_VERSION}/sysbox-ce_${SYSBOX_VERSION}-0.linux_amd64.deb"
-    apt-get install -y ./sysbox-ce.deb
-    rm -f sysbox-ce.deb
+# --- 3. sysbox-ce (built from master — see SYSBOX_COMMIT comment above) ---
+# Skip rebuild if sysbox-runc is already at the fix commit.
+if command -v sysbox-runc >/dev/null 2>&1 \
+    && sysbox-runc --version 2>&1 | grep -q "$SYSBOX_RUNC_FIX_COMMIT"; then
+    log "sysbox-runc already at fix commit ${SYSBOX_RUNC_FIX_COMMIT:0:8}, skipping rebuild"
 else
-    log "sysbox-ce already installed"
+    log "building sysbox from master commit ${SYSBOX_COMMIT:0:8} (5–15 min first run)"
+    apt-get install -y --no-install-recommends git make
+
+    install -d -m 0755 /opt/sysbox-build
+    if [[ ! -d /opt/sysbox-build/.git ]]; then
+        git clone --recursive https://github.com/nestybox/sysbox.git /opt/sysbox-build
+    else
+        git -C /opt/sysbox-build fetch origin
+    fi
+    cd /opt/sysbox-build
+    git checkout "$SYSBOX_COMMIT"
+    git submodule update --init --recursive
+
+    # `make sysbox` runs the build in a Docker-based builder container — no Go
+    # toolchain needed on the host. `make install` lays down binaries + systemd units.
+    make sysbox
+    make install
+
+    # Reload systemd in case unit files changed
+    systemctl daemon-reload
+    cd /
 fi
 
 # --- 4. Register sysbox-runc with Docker daemon ---
@@ -143,7 +167,7 @@ docker pull "${IMAGE}"
 cat > /etc/ztr-coding-agent.version <<EOF
 provisioned: yes
 bootstrap_date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-sysbox-ce: ${SYSBOX_VERSION}
+sysbox: source build at $SYSBOX_COMMIT
 tailscale: $(tailscale version | head -1 || echo unknown)
 EOF
 

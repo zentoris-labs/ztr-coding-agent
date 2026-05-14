@@ -172,11 +172,24 @@ cleanly — see [#25661](https://github.com/anthropics/claude-code/issues/25661)
 
 ## Upgrading sysbox
 
-`SYSBOX_VERSION` is pinned at the top of [bootstrap.sh](bootstrap.sh). To bump:
+> **Current state: sysbox is built from master** (commit pinned in
+> [bootstrap.sh](bootstrap.sh) as `SYSBOX_COMMIT`). All released sysbox
+> versions (≤ 0.7.0) are missing time-namespace support in `sysbox-runc`,
+> causing `namespace {"time" ""} does not exist` on Docker 27.x+ /
+> containerd 2.x. Fix landed on master 2026-05-12 (sysbox-runc commit
+> `cf83133d`) but no tagged release yet.
 
-1. Check [github.com/nestybox/sysbox/releases](https://github.com/nestybox/sysbox/releases)
-2. Update `SYSBOX_VERSION`, commit, push
-3. On existing hosts: re-run the bootstrap (idempotent)
+When Nestybox cuts a new release with the fix:
+
+1. Replace the source-build block in `bootstrap.sh` with the .deb install
+   path (`curl ... sysbox-ce.deb && apt install`).
+2. On existing hosts: re-run the bootstrap. It detects the fix commit; if
+   the installed binary doesn't match, it rebuilds (or installs the .deb
+   in the post-fix world).
+
+To bump the build commit before then: edit `SYSBOX_COMMIT` in
+`bootstrap.sh` to a newer master SHA, commit, push, re-run bootstrap on
+each host. Build takes 5–15 min the first time, cached on subsequent runs.
 
 ## Why this shape
 
