@@ -45,26 +45,37 @@ No public SSH ports on the host. Brute-force isn't possible because the port isn
 
 ### Step 1 — Configure your Tailscale ACL policy (one-time)
 
-Open **[login.tailscale.com/admin/acls/file](https://login.tailscale.com/admin/acls/file)** and merge these blocks into your policy (adjusting `<your-email>` and `<your-initials>`):
+Open **[login.tailscale.com/admin/acls/file](https://login.tailscale.com/admin/acls/file)** and replace your policy with this (adjusting `<your-email>` and `<your-initials>`):
 
 ```hujson
 {
   "tagOwners": {
     "tag:agent-host":             ["autogroup:admin"],
     "tag:agent-<your-initials>":  ["<your-email>"],
+    // One line per teammate (added on onboarding — see "Adding a teammate" below)
   },
 
   "grants": [
-    { "src": ["*"], "dst": ["*"], "ip": ["*"] },
+    // Admins reach everything (for ops/debugging)
+    { "src": ["autogroup:admin"], "dst": ["*"], "ip": ["*"] },
+
+    // Members reach their own non-tagged devices (laptop ↔ phone)
+    { "src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"] },
+
+    // Each developer reaches only their own tagged agents — strict isolation
+    { "src": ["<your-email>"], "dst": ["tag:agent-<your-initials>"], "ip": ["*"] },
+    // Add per-teammate grants here
   ],
 
   "ssh": [
+    // Default: SSH to your own non-tagged devices (laptop ↔ phone)
     {
       "action": "check",
       "src":    ["autogroup:member"],
       "dst":    ["autogroup:self"],
       "users":  ["autogroup:nonroot", "root"],
     },
+    // Admins: Tailscale SSH to host VMs
     {
       "action": "accept",
       "src":    ["autogroup:admin"],
@@ -77,7 +88,24 @@ Open **[login.tailscale.com/admin/acls/file](https://login.tailscale.com/admin/a
 
 Click **Save**.
 
-> Adding a teammate later: append `tag:agent-<their-initials>: ["<their-email>"]` to `tagOwners`. That's it for solo-trust setups. If you want isolation between developers (Bob can't reach Alice's agents), narrow the `grants` block.
+This policy gives you network-level isolation: each developer can only reach their *own* tagged agents over the tailnet. Admins keep an "ops override" reaching everything, useful for debugging others' setups.
+
+#### Adding a teammate
+
+When Bob joins (initials `bo`, email `bob@yourdomain.com`):
+
+1. Invite Bob to the tailnet (Tailscale admin → Users → Invite).
+2. Add two stanzas to the ACL policy:
+   ```hujson
+   // In tagOwners:
+   "tag:agent-bo": ["bob@yourdomain.com"],
+
+   // In grants:
+   { "src": ["bob@yourdomain.com"], "dst": ["tag:agent-bo"], "ip": ["*"] },
+   ```
+3. Bob generates his own auth key at [admin/settings/keys](https://login.tailscale.com/admin/settings/keys) tagged `tag:agent-bo`.
+4. Bob configures his agent on the shared host: copy `.env.example` to `.env.bo`, fill in his key + tokens, append a `agent-bo-01` service block to `docker-compose.yml`, `docker compose up -d agent-bo-01`.
+5. Bob connects via `ssh agent@agent-bo-01`. Christof can't reach Bob's agents (and vice versa).
 
 ---
 
