@@ -45,36 +45,26 @@ No public SSH ports on the host. Brute-force isn't possible because the port isn
 
 ### Step 1 — Configure your Tailscale ACL policy (one-time)
 
-Open **[login.tailscale.com/admin/acls/file](https://login.tailscale.com/admin/acls/file)**.
-
-Replace your policy with this (adjusting `<your-email>` and `<your-initials>` — e.g. `ch` for Christof):
+Open **[login.tailscale.com/admin/acls/file](https://login.tailscale.com/admin/acls/file)** and merge these blocks into your policy (adjusting `<your-email>` and `<your-initials>`):
 
 ```hujson
 {
-  // Who can apply each tag (controls auth-key generation, not access)
   "tagOwners": {
     "tag:agent-host":             ["autogroup:admin"],
     "tag:agent-<your-initials>":  ["<your-email>"],
   },
 
-  // Network reachability over the tailnet
-  "acls": [
-    // You can reach your own agent containers (then sshd inside auths the shell)
-    {
-      "action": "accept",
-      "src":    ["<your-email>"],
-      "dst":    ["tag:agent-<your-initials>:*"],
-    },
-    // Admins reach everything (you, if solo)
-    {
-      "action": "accept",
-      "src":    ["autogroup:admin"],
-      "dst":    ["*:*"],
-    },
+  "grants": [
+    { "src": ["*"], "dst": ["*"], "ip": ["*"] },
   ],
 
-  // Tailscale SSH for host admin (agents use plain sshd, not this)
   "ssh": [
+    {
+      "action": "check",
+      "src":    ["autogroup:member"],
+      "dst":    ["autogroup:self"],
+      "users":  ["autogroup:nonroot", "root"],
+    },
     {
       "action": "accept",
       "src":    ["autogroup:admin"],
@@ -87,7 +77,7 @@ Replace your policy with this (adjusting `<your-email>` and `<your-initials>` �
 
 Click **Save**.
 
-> Adding a teammate later: add `tag:agent-bo` (Bob's initials) to `tagOwners` with Bob's email, plus an ACL stanza letting Bob reach his own agents. Two extra blocks per developer.
+> Adding a teammate later: append `tag:agent-<their-initials>: ["<their-email>"]` to `tagOwners`. That's it for solo-trust setups. If you want isolation between developers (Bob can't reach Alice's agents), narrow the `grants` block.
 
 ---
 
