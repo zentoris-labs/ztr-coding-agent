@@ -1,0 +1,65 @@
+# Single-agent template. Copy this to your host and scale by duplicating the
+# service block + matching volumes for each additional agent (see the
+# multi-agent example in infra/README.md).
+#
+# Slot naming convention: agent-<owner>-<NN>
+#   where <owner> is the 2- or 3-char initials of the developer who owns the
+#   slot, and <NN> is a 2-digit per-owner index. Replace every `xx` below
+#   with the owner's initials (e.g. `al` → agent-al-01).
+#
+# Required setup before `docker compose up`:
+#   Copy .env.example -> .env.<initials> (one per developer), fill in tokens +
+#   TS_AUTHKEY (single-use key from your Tailscale admin console:
+#   https://login.tailscale.com/admin/settings/keys).
+#
+# Host requirements:
+#   - Docker engine
+#   - sysbox-runc registered as a runtime (run `infra/bootstrap.sh` on the host)
+#   - Tailscale account; the host should also be on the same tailnet
+#
+# Access (after `up`):
+#   ssh agent@agent-xx-01     # from any tailnet-connected client (MagicDNS)
+#   (No public ports exposed — agent is reachable only on the tailnet.)
+
+services:
+  agent-xx-01:
+    image: ghcr.io/zentoris-labs/ztr-coding-agent:latest
+    pull_policy: missing
+    build:
+      context: .
+      platforms:
+        - linux/amd64
+    container_name: agent-xx-01
+    hostname: agent-xx-01
+    restart: unless-stopped
+    platform: linux/amd64
+    # sysbox-runc gives the container nested kernel namespaces — required for
+    # nested Docker (Testcontainers) and lets tailscaled run cleanly.
+    runtime: sysbox-runc
+    # Per-owner env file: .env.<initials> on the host (gitignored).
+    # Copy .env.example to .env.xx (replace xx with the owner's initials) and
+    # fill in TS_AUTHKEY, GITHUB_TOKEN, etc.
+    env_file: .env.xx
+    environment:
+      # Slot ID: <owner-initials>-<NN>. Example: "al-01" (Alice's first agent).
+      # Hostname on the tailnet becomes agent-${AGENT_ID}.
+      AGENT_ID: "xx-01"
+    volumes:
+      # Workspace (cloned repos live here).
+      - agent-xx-01-workspace:/workspace
+      # Agent user home — persists ~/.claude/, ~/.config/gh/, ~/.gitconfig,
+      # and ~/.local/share/docker (nested daemon's image/container store)
+      # across rebuilds.
+      - agent-xx-01-home:/home/agent
+      # SSH host keys — persist across container rebuilds so clients'
+      # known_hosts entries stay valid.
+      - agent-xx-01-ssh-keys:/etc/ssh/keys
+      # Tailscale node identity — persists across restarts so the agent keeps
+      # the same tailnet IP / hostname.
+      - agent-xx-01-tailscale:/var/lib/tailscale
+
+volumes:
+  agent-xx-01-workspace:
+  agent-xx-01-home:
+  agent-xx-01-ssh-keys:
+  agent-xx-01-tailscale:

@@ -1,0 +1,22 @@
+# Local env / secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Claude Code local-only state. `.claude/settings.json` is project-shared
+# and SHOULD be committed when it exists.
+.claude/settings.local.json
+.claude/worktrees/
+
+# Build / runtime junk
+*.log
+*.tmp

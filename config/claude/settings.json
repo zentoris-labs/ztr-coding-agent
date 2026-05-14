@@ -1,0 +1,8 @@
+{
+  "model": "claude-opus-4-7[1m]",
+  "effortLevel": "xhigh",
+  "theme": "dark",
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
+  }
+}

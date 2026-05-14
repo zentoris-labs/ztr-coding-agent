@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.eol": "\n",
+    "[shellscript]": {
+      "files.eol": "\n"
+    },
+    "[dockerfile]": {
+      "files.eol": "\n"
+    },
+    "files.associations": {
+      "Dockerfile*": "dockerfile",
+      ".env.example": "dotenv"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-azuretools.vscode-containers",
+      "timonwong.shellcheck",
+      "foxundermoon.shell-format"
+    ]
+  }
+}
