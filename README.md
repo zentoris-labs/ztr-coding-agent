@@ -105,7 +105,7 @@ When Bob joins (initials `bo`, email `bob@yourdomain.com`):
    ```
 3. Bob generates his own auth key at [admin/settings/keys](https://login.tailscale.com/admin/settings/keys) tagged `tag:agent-bo`.
 4. Bob configures his agent on the shared host: copy `.env.example` to `.env.bo`, fill in his key + tokens, append a `agent-bo-01` service block to `docker-compose.yml`, `docker compose up -d agent-bo-01`.
-5. Bob connects via `ssh agent@agent-bo-01`. Christof can't reach Bob's agents (and vice versa).
+5. Bob connects via `ssh agent@agent-bo-01`. Other developers can't reach Bob's agents (and vice versa).
 
 ---
 
