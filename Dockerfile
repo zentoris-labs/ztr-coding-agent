@@ -88,6 +88,8 @@ RUN install -m 0755 -d /etc/apt/keyrings \
         docker-ce \
         docker-ce-cli \
         containerd.io \
+        docker-buildx-plugin \
+        docker-compose-plugin \
         iptables \
         iproute2 \
     && rm -rf /var/lib/apt/lists/* \
