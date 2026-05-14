@@ -9,11 +9,10 @@
 # Usage (recommended — SSH in first, then run on the host):
 #   ssh root@<host>
 #   # then on the host:
-#   export HOST_TS_AUTHKEY=tskey-auth-xxxx
 #   curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
+#   # → script prompts (silently) for the Tailscale auth key. Paste it.
 #
-# Alternate (one-shot pipe from your laptop):
-#   ssh root@<host> "HOST_TS_AUTHKEY=tskey-auth-xxxx bash -s" < infra/bootstrap.sh
+# Non-interactive (CI / scripted): pre-set HOST_TS_AUTHKEY env before running.
 
 set -euo pipefail
 
@@ -99,17 +98,25 @@ else
 fi
 systemctl enable --now tailscaled >/dev/null
 
-# Auto-join the tailnet if an auth key was provided.
-if [[ -n "${HOST_TS_AUTHKEY:-}" ]]; then
-    if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"' ; then
-        log "tailscale already up; skipping join"
-    else
+# Join the tailnet. Prefer HOST_TS_AUTHKEY env (for non-interactive runs);
+# otherwise prompt silently via /dev/tty so the key never lands in env,
+# shell history, or files.
+if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"' ; then
+    log "tailscale already up; skipping join"
+else
+    if [[ -z "${HOST_TS_AUTHKEY:-}" && -r /dev/tty ]]; then
+        printf '[bootstrap] paste Tailscale auth key (tag:agent-host, hidden): ' >&2
+        IFS= read -rs HOST_TS_AUTHKEY < /dev/tty
+        echo >&2
+    fi
+    if [[ -n "${HOST_TS_AUTHKEY:-}" ]]; then
         log "joining tailnet (Tailscale SSH enabled)"
         tailscale up --auth-key="$HOST_TS_AUTHKEY" --ssh --accept-routes
+        unset HOST_TS_AUTHKEY
+    else
+        log "no auth key provided — tailscale installed but not joined."
+        log "  to join later: tailscale up --ssh"
     fi
-else
-    log "HOST_TS_AUTHKEY not set — tailscale installed but not joined."
-    log "  To join later: tailscale up --ssh"
 fi
 
 # --- 6. Working directory + repo files (compose template + .env.example) ---

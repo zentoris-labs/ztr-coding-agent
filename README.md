@@ -146,11 +146,14 @@ SSH in with your standard SSH key (the one you registered), then run the bootstr
 ssh root@<host-ip>
 
 # Now on the host:
-export HOST_TS_AUTHKEY=tskey-auth-<paste-the-host-key-from-step-2>
 curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
 ```
 
-Takes about 2-3 minutes. Watch for `[bootstrap] done.` at the end.
+The script prompts (silently) for your Tailscale auth key from Step 2 —
+paste it and hit Enter. The key isn't stored anywhere: not in env vars, not
+in shell history, not in any file. Used once for the tailnet join, then dropped.
+
+Takes about 2-3 minutes total. Watch for `[bootstrap] done.` at the end.
 
 What this installs:
 - Docker CE + Compose

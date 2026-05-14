@@ -42,13 +42,15 @@ Then SSH in and run the bootstrap there:
 ssh root@<host>
 
 # Then on the host:
-export HOST_TS_AUTHKEY=tskey-auth-xxxxx
 curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
 ```
 
-(If you prefer one-shot, you can also pipe the script via SSH stdin from
-your laptop — but the SSH-then-run pattern above is the supported flow
-and lets you watch the output live.)
+The script prompts (silently) for the auth key. Paste it, hit Enter. The
+key is used once for the tailnet join and then dropped — never written to
+env vars, files, or shell history.
+
+For non-interactive runs (CI / scripted), pre-set `HOST_TS_AUTHKEY` before
+invoking the script.
 
 The script installs:
 
