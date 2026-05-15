@@ -122,14 +122,5 @@ model: per-host-isolation (VM is the trust boundary; privileged DinD inside)
 tailscale: $(tailscale version | head -1 || echo unknown)
 EOF
 
-log "done."
-log "next steps (all on this host, in ${WORKDIR}/):"
-log "  1. If tailscale not joined yet:  tailscale up --ssh"
-log "  2. cp .env.example .env  &&  nano .env"
-log "     Set INITIALS, COMPOSE_PROFILES (count of agents to run; cumulative),"
-log "     TS_AUTHKEY (REUSABLE!), GITHUB_TOKEN, SSH_PASSWORD, etc."
-log "  3. docker compose up -d"
-log "     Only the slots in COMPOSE_PROFILES start. Add/remove later by"
-log "     editing COMPOSE_PROFILES and re-running 'docker compose up -d'."
-log "  4. From any tailnet client:  ssh agent@agent-<initials>-01"
-log "     (e.g. ssh agent@agent-ch-01 if INITIALS=ch)"
+log "done. next: edit ${WORKDIR}/.env, then 'docker compose up -d'."
+log "full quick-start: https://github.com/zentoris-labs/ztr-coding-agent#quick-start"
