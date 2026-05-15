@@ -51,7 +51,8 @@ chmod 600 .env
 docker compose up -d
 
 # 5. SSH in from your laptop
-ssh agent@agent-ch-01    # password = SSH_PASSWORD; lands in ~/
+ssh-keygen -R agent-ch-01    # optional: clears stale known_hosts entry (same as step 2)
+ssh agent@agent-ch-01        # password = SSH_PASSWORD; lands in ~/
 ```
 
 First `claude` invocation prompts for `/login` (OAuth → Claude Max subscription). One-time per agent slot; persisted in the home volume.
