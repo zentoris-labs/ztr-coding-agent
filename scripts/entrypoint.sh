@@ -5,7 +5,7 @@
 #   3. Wire up git author identity + HTTPS credentials
 #   4. Set SSH password (SSH_PASSWORD; required — sshd is tailnet-only,
 #      and Claude Code Desktop can't use key auth cleanly per issue #25661)
-#   5. In-container Docker daemon (on by default; AGENT_ENABLE_DOCKER=0 to skip; needs `privileged: true` in compose)
+#   5. In-container Docker daemon (on by default; AGENT_ENABLE_DOCKER=0 to skip; needs `privileged: true` AND a named volume on /var/lib/docker in compose)
 #   6. Optional repo auto-clone (AGENT_REPOS)
 #   7. Start tailscaled and join the tailnet (sshd is reachable only via the tailnet)
 #   8. Start sshd in the foreground; container exits if either tailscaled or sshd dies
@@ -95,7 +95,7 @@ if [[ "${AGENT_ENABLE_DOCKER:-1}" != "0" ]]; then
         sleep 0.5
     done
     if ! kill -0 "$DOCKERD_PID" 2>/dev/null; then
-        log "ERROR: dockerd exited during startup — container needs 'privileged: true' in compose. See /tmp/dockerd.log."
+        log "ERROR: dockerd exited during startup — container needs 'privileged: true' AND a named volume on /var/lib/docker in compose. See /tmp/dockerd.log."
     fi
 fi
 

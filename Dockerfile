@@ -79,6 +79,11 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 # safe here because every agent on a given VM belongs to the same developer;
 # cross-developer separation is enforced by running each developer on their
 # own VM + Tailscale ACLs, not by sandboxing agents from each other.
+#
+# Storage: `/var/lib/docker` MUST be a named volume (see docker-compose.yml).
+# Without it, the inner dockerd inherits the container's overlay2 rootfs and
+# overlay-on-overlay fails — Testcontainers reports it as "cannot mount
+# overlayfs in this sandbox". Privileged unblocks capabilities, not storage.
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \

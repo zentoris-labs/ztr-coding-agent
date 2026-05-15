@@ -56,6 +56,7 @@ services:
       - agent-01-home:/home/agent
       - agent-01-ssh-keys:/etc/ssh/keys
       - agent-01-tailscale:/var/lib/tailscale
+      - agent-01-docker:/var/lib/docker
 
   agent-02:
     <<: *agent
@@ -67,6 +68,7 @@ services:
       - agent-02-home:/home/agent
       - agent-02-ssh-keys:/etc/ssh/keys
       - agent-02-tailscale:/var/lib/tailscale
+      - agent-02-docker:/var/lib/docker
 
   agent-03:
     <<: *agent
@@ -78,6 +80,7 @@ services:
       - agent-03-home:/home/agent
       - agent-03-ssh-keys:/etc/ssh/keys
       - agent-03-tailscale:/var/lib/tailscale
+      - agent-03-docker:/var/lib/docker
 
   agent-04:
     <<: *agent
@@ -89,6 +92,7 @@ services:
       - agent-04-home:/home/agent
       - agent-04-ssh-keys:/etc/ssh/keys
       - agent-04-tailscale:/var/lib/tailscale
+      - agent-04-docker:/var/lib/docker
 
   agent-05:
     <<: *agent
@@ -100,6 +104,7 @@ services:
       - agent-05-home:/home/agent
       - agent-05-ssh-keys:/etc/ssh/keys
       - agent-05-tailscale:/var/lib/tailscale
+      - agent-05-docker:/var/lib/docker
 
   agent-06:
     <<: *agent
@@ -111,6 +116,7 @@ services:
       - agent-06-home:/home/agent
       - agent-06-ssh-keys:/etc/ssh/keys
       - agent-06-tailscale:/var/lib/tailscale
+      - agent-06-docker:/var/lib/docker
 
   agent-07:
     <<: *agent
@@ -122,6 +128,7 @@ services:
       - agent-07-home:/home/agent
       - agent-07-ssh-keys:/etc/ssh/keys
       - agent-07-tailscale:/var/lib/tailscale
+      - agent-07-docker:/var/lib/docker
 
   agent-08:
     <<: *agent
@@ -133,6 +140,7 @@ services:
       - agent-08-home:/home/agent
       - agent-08-ssh-keys:/etc/ssh/keys
       - agent-08-tailscale:/var/lib/tailscale
+      - agent-08-docker:/var/lib/docker
 
   agent-09:
     <<: *agent
@@ -144,6 +152,7 @@ services:
       - agent-09-home:/home/agent
       - agent-09-ssh-keys:/etc/ssh/keys
       - agent-09-tailscale:/var/lib/tailscale
+      - agent-09-docker:/var/lib/docker
 
   agent-10:
     <<: *agent
@@ -155,6 +164,7 @@ services:
       - agent-10-home:/home/agent
       - agent-10-ssh-keys:/etc/ssh/keys
       - agent-10-tailscale:/var/lib/tailscale
+      - agent-10-docker:/var/lib/docker
 
   agent-11:
     <<: *agent
@@ -166,6 +176,7 @@ services:
       - agent-11-home:/home/agent
       - agent-11-ssh-keys:/etc/ssh/keys
       - agent-11-tailscale:/var/lib/tailscale
+      - agent-11-docker:/var/lib/docker
 
   agent-12:
     <<: *agent
@@ -177,6 +188,7 @@ services:
       - agent-12-home:/home/agent
       - agent-12-ssh-keys:/etc/ssh/keys
       - agent-12-tailscale:/var/lib/tailscale
+      - agent-12-docker:/var/lib/docker
 
   agent-13:
     <<: *agent
@@ -188,6 +200,7 @@ services:
       - agent-13-home:/home/agent
       - agent-13-ssh-keys:/etc/ssh/keys
       - agent-13-tailscale:/var/lib/tailscale
+      - agent-13-docker:/var/lib/docker
 
   agent-14:
     <<: *agent
@@ -199,6 +212,7 @@ services:
       - agent-14-home:/home/agent
       - agent-14-ssh-keys:/etc/ssh/keys
       - agent-14-tailscale:/var/lib/tailscale
+      - agent-14-docker:/var/lib/docker
 
   agent-15:
     <<: *agent
@@ -210,6 +224,7 @@ services:
       - agent-15-home:/home/agent
       - agent-15-ssh-keys:/etc/ssh/keys
       - agent-15-tailscale:/var/lib/tailscale
+      - agent-15-docker:/var/lib/docker
 
   agent-16:
     <<: *agent
@@ -221,6 +236,7 @@ services:
       - agent-16-home:/home/agent
       - agent-16-ssh-keys:/etc/ssh/keys
       - agent-16-tailscale:/var/lib/tailscale
+      - agent-16-docker:/var/lib/docker
 
   agent-17:
     <<: *agent
@@ -232,6 +248,7 @@ services:
       - agent-17-home:/home/agent
       - agent-17-ssh-keys:/etc/ssh/keys
       - agent-17-tailscale:/var/lib/tailscale
+      - agent-17-docker:/var/lib/docker
 
   agent-18:
     <<: *agent
@@ -243,6 +260,7 @@ services:
       - agent-18-home:/home/agent
       - agent-18-ssh-keys:/etc/ssh/keys
       - agent-18-tailscale:/var/lib/tailscale
+      - agent-18-docker:/var/lib/docker
 
   agent-19:
     <<: *agent
@@ -254,6 +272,7 @@ services:
       - agent-19-home:/home/agent
       - agent-19-ssh-keys:/etc/ssh/keys
       - agent-19-tailscale:/var/lib/tailscale
+      - agent-19-docker:/var/lib/docker
 
   agent-20:
     <<: *agent
@@ -265,65 +284,92 @@ services:
       - agent-20-home:/home/agent
       - agent-20-ssh-keys:/etc/ssh/keys
       - agent-20-tailscale:/var/lib/tailscale
+      - agent-20-docker:/var/lib/docker
 
+# `agent-NN-docker` backs the in-container `/var/lib/docker`. Without it, the
+# inner dockerd would inherit the container's overlay2 rootfs and fail with
+# "cannot mount overlayfs read-write" the moment Testcontainers (or any nested
+# `docker run`) tries to create a container layer. Named volumes are backed by
+# ext4/xfs on the host, so overlay-on-volume works cleanly and pulled images
+# survive container recreation.
 volumes:
   agent-01-home:
   agent-01-ssh-keys:
   agent-01-tailscale:
+  agent-01-docker:
   agent-02-home:
   agent-02-ssh-keys:
   agent-02-tailscale:
+  agent-02-docker:
   agent-03-home:
   agent-03-ssh-keys:
   agent-03-tailscale:
+  agent-03-docker:
   agent-04-home:
   agent-04-ssh-keys:
   agent-04-tailscale:
+  agent-04-docker:
   agent-05-home:
   agent-05-ssh-keys:
   agent-05-tailscale:
+  agent-05-docker:
   agent-06-home:
   agent-06-ssh-keys:
   agent-06-tailscale:
+  agent-06-docker:
   agent-07-home:
   agent-07-ssh-keys:
   agent-07-tailscale:
+  agent-07-docker:
   agent-08-home:
   agent-08-ssh-keys:
   agent-08-tailscale:
+  agent-08-docker:
   agent-09-home:
   agent-09-ssh-keys:
   agent-09-tailscale:
+  agent-09-docker:
   agent-10-home:
   agent-10-ssh-keys:
   agent-10-tailscale:
+  agent-10-docker:
   agent-11-home:
   agent-11-ssh-keys:
   agent-11-tailscale:
+  agent-11-docker:
   agent-12-home:
   agent-12-ssh-keys:
   agent-12-tailscale:
+  agent-12-docker:
   agent-13-home:
   agent-13-ssh-keys:
   agent-13-tailscale:
+  agent-13-docker:
   agent-14-home:
   agent-14-ssh-keys:
   agent-14-tailscale:
+  agent-14-docker:
   agent-15-home:
   agent-15-ssh-keys:
   agent-15-tailscale:
+  agent-15-docker:
   agent-16-home:
   agent-16-ssh-keys:
   agent-16-tailscale:
+  agent-16-docker:
   agent-17-home:
   agent-17-ssh-keys:
   agent-17-tailscale:
+  agent-17-docker:
   agent-18-home:
   agent-18-ssh-keys:
   agent-18-tailscale:
+  agent-18-docker:
   agent-19-home:
   agent-19-ssh-keys:
   agent-19-tailscale:
+  agent-19-docker:
   agent-20-home:
   agent-20-ssh-keys:
   agent-20-tailscale:
+  agent-20-docker:
