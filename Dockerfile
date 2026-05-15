@@ -98,10 +98,21 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 # cross-developer separation is enforced by running each developer on their
 # own VM + Tailscale ACLs, not by sandboxing agents from each other.
 #
-# Storage: `/var/lib/docker` MUST be a named volume (see docker-compose.yml).
-# Without it, the inner dockerd inherits the container's overlay2 rootfs and
-# overlay-on-overlay fails — Testcontainers reports it as "cannot mount
-# overlayfs in this sandbox". Privileged unblocks capabilities, not storage.
+# Storage: TWO things have to be true for nested Docker to work cleanly:
+#
+#   1. `/var/lib/docker` MUST be a named volume (see docker-compose.yml).
+#      Without it, dockerd inherits the container's overlay rootfs and
+#      overlay-on-overlay storage fails.
+#
+#   2. dockerd MUST use the classic overlay2 storage driver, NOT the
+#      containerd image store (which is the docker-ce default since v28).
+#      The containerd snapshotter stores layers under /var/lib/containerd
+#      (still on overlay rootfs!) and reports as `Storage Driver: overlayfs`
+#      with `driver-type: io.containerd.snapshotter.v1` — confusing because
+#      it looks like a fix but actually undoes the volume mount. We force
+#      overlay2 via /etc/docker/daemon.json below.
+#
+# Privileged unblocks capabilities, not storage. Both pieces are required.
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
@@ -119,6 +130,18 @@ RUN install -m 0755 -d /etc/apt/keyrings \
         iproute2 \
     && rm -rf /var/lib/apt/lists/* \
     && systemctl disable docker.service docker.socket 2>/dev/null || true
+
+# Force classic overlay2 storage driver — see comment block above for why.
+# Picked up by dockerd at startup; entrypoint doesn't need to know about it.
+RUN install -d -m 0755 /etc/docker \
+    && printf '%s\n' \
+        '{' \
+        '  "features": {' \
+        '    "containerd-snapshotter": false' \
+        '  },' \
+        '  "storage-driver": "overlay2"' \
+        '}' \
+        > /etc/docker/daemon.json
 
 # --- Claude Code CLI (latest at build time; autoupdater enabled at runtime) ---
 RUN npm install -g "@anthropic-ai/claude-code@latest"
