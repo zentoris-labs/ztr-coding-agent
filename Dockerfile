@@ -15,28 +15,37 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     TZ=Etc/UTC \
+    EDITOR=nano \
+    PAGER=less \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     DOTNET_NOLOGO=1 \
     DOTNET_ROOT=/usr/share/dotnet \
     PATH=/usr/share/dotnet:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # --- Base OS packages ---
+# Core OS + developer toolbelt. Picked for "reflex" debugging: DNS, port
+# probes, process/file inspection, DB clients. Skip cloud CLIs and extra
+# language runtimes — those are project-specific and the agent can install
+# them per-repo without bloating every image.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         wget \
         gnupg \
         git \
+        git-lfs \
         openssh-server \
         sudo \
         less \
         vim \
         nano \
         jq \
+        yq \
         ripgrep \
         fd-find \
         tmux \
         htop \
+        tree \
         tzdata \
         unzip \
         zip \
@@ -46,6 +55,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-venv \
         python3-pip \
         pipx \
+        bash-completion \
+        openssl \
+        dnsutils \
+        iputils-ping \
+        netcat-openbsd \
+        lsof \
+        strace \
+        postgresql-client \
+        redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Node 22 via NodeSource (needed for Claude Code CLI) ---
@@ -131,6 +149,17 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
     && apt-get update \
     && apt-get install -y --no-install-recommends tailscale \
     && rm -rf /var/lib/apt/lists/*
+
+# --- SSH client default: never block on a host-key prompt ---
+# `accept-new` trusts first-seen hosts but still rejects mismatches (downgrade
+# protection). Without this, the first `git clone git@…` or `ssh other-agent`
+# inside a non-interactive shell hangs forever on the host-key prompt that
+# nothing is there to answer. /etc/ssh/ssh_config sources ssh_config.d/*.conf,
+# and the user's ~/.ssh/config still wins per-host.
+RUN install -d -m 0755 /etc/ssh/ssh_config.d \
+    && printf 'Host *\n  StrictHostKeyChecking accept-new\n' \
+        > /etc/ssh/ssh_config.d/10-agent-defaults.conf \
+    && chmod 0644 /etc/ssh/ssh_config.d/10-agent-defaults.conf
 
 # --- sshd: pubkey-only by default; password optionally enabled per-agent ---
 # Host keys persisted via the agent-<owner>-<NN>-ssh-keys named volume so
