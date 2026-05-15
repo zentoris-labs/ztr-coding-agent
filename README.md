@@ -35,7 +35,7 @@ Sizing (per developer):
 hcloud server create --name ztr-agent-host-ch --type cpx32 \
   --image ubuntu-24.04 --location hel1 --ssh-key <your-key>
 
-# 2. Bootstrap the host (installs Docker + Tailscale, fetches compose template)
+# 2. Bootstrap the host (installs Docker + Tailscale, clones the repo to /opt/ztr-coding-agent)
 ssh-keygen -R <ip>           # optional: clears stale known_hosts entry if Hetzner recycled the IP
 ssh root@<ip>
 curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
@@ -73,11 +73,19 @@ Change later → edit `.env` → `docker compose up -d`. Unused slots never crea
 
 ## Daily use
 
+All commands run on the host, from `/opt/ztr-coding-agent`.
+
+> **Migrating from a pre-git-clone host?** If `/opt/ztr-coding-agent/.git` doesn't
+> exist, your host predates the git-managed layout. Back up your `.env`
+> (`cp /opt/ztr-coding-agent/.env /root/.env.backup`), remove the directory
+> (`rm -rf /opt/ztr-coding-agent`), and re-run the bootstrap one-liner — then
+> restore `.env`. One-time per host; future updates are just `git pull`.
+
 | Action | Command |
 |---|---|
-| Bump agent count | Edit `COMPOSE_PROFILES` → `docker compose up -d` |
+| Bump agent count | Edit `COMPOSE_PROFILES` in `.env` → `docker compose up -d` |
 | Restart an agent | `docker compose restart agent-01` |
-| Upgrade the image | `docker compose pull && docker compose up -d` |
+| Update everything | `git pull && docker compose pull && docker compose up -d` |
 | Tear down (keep state) | `docker compose down` |
 | Tear down (wipe state) | `docker compose down -v` |
 | Delete the host | `hcloud server delete ztr-agent-host-<initials>` |

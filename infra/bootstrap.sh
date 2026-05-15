@@ -94,21 +94,28 @@ else
     fi
 fi
 
-# --- 4. Working directory + repo files (compose template + .env.example) ---
-# Pulls the latest docker-compose.yml and .env.example from the public repo
-# so the operator doesn't have to scp them. Existing files are NOT overwritten
-# (so re-running bootstrap won't clobber a customized compose).
-install -d -m 0755 "${WORKDIR}"
-RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main}"
-for f in docker-compose.yml .env.example; do
-    target="${WORKDIR}/${f}"
-    if [[ -f "$target" ]]; then
-        log "$target already exists, leaving it alone"
-    else
-        log "fetching $f -> $target"
-        curl -fsSL "${RAW_BASE}/${f}" -o "$target"
+# --- 4. Working directory: git clone of the repo (so updates are `git pull`) ---
+# Public repo, shallow clone. .env is gitignored upstream, so the operator's
+# secrets sit alongside the working tree without colliding with `git pull`.
+# Re-runnable: existing clone → fast-forward to latest; missing → fresh clone.
+REPO_URL="${REPO_URL:-https://github.com/zentoris-labs/ztr-coding-agent.git}"
+REPO_REF="${REPO_REF:-main}"
+if [[ -d "${WORKDIR}/.git" ]]; then
+    log "${WORKDIR} is a git clone — fetching ${REPO_REF}"
+    git -C "${WORKDIR}" fetch --quiet origin "${REPO_REF}"
+    if ! git -C "${WORKDIR}" merge --ff-only "origin/${REPO_REF}"; then
+        log "  WARN: fast-forward failed (local edits in ${WORKDIR}?). Resolve manually:"
+        log "    git -C ${WORKDIR} status"
     fi
-done
+elif [[ -d "${WORKDIR}" ]] && [[ -n "$(ls -A "${WORKDIR}" 2>/dev/null)" ]]; then
+    log "WARN: ${WORKDIR} exists and is NOT a git clone (older bootstrap layout)."
+    log "  to migrate: cp ${WORKDIR}/.env /root/.env.backup ; rm -rf ${WORKDIR} ; re-run bootstrap"
+    log "  leaving it alone for now."
+else
+    log "cloning ${REPO_URL} (${REPO_REF}) -> ${WORKDIR}"
+    rm -rf "${WORKDIR}"   # remove empty placeholder if present
+    git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" "${WORKDIR}"
+fi
 
 # --- 5. Pre-pull the image (public on GHCR, no auth needed) ---
 log "pulling ${IMAGE}"
