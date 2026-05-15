@@ -73,10 +73,12 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 
 # --- Docker engine + CLI (for Testcontainers etc.) ---
 # Daemon is started by the entrypoint and listens on /var/run/docker.sock.
-# Isolation is provided by the *outer* container runtime (sysbox-runc on
-# Hetzner / Linux hosts). On Docker Desktop WSL2 the daemon won't start
-# without --privileged, which we accept as a temporary limitation until
-# the Hetzner migration.
+# Per-host isolation model: the *VM* is the trust boundary, so the container
+# runs `privileged: true` in compose. That gives the in-container dockerd a
+# plain rootful environment with no nested-namespace gymnastics. This is
+# safe here because every agent on a given VM belongs to the same developer;
+# cross-developer separation is enforced by running each developer on their
+# own VM + Tailscale ACLs, not by sandboxing agents from each other.
 RUN install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
@@ -140,16 +142,6 @@ RUN mkdir -p /var/run/sshd /etc/ssh/keys \
     && sed -i '/^HostKey /d' /etc/ssh/sshd_config \
     && printf '\nHostKey /etc/ssh/keys/ssh_host_ed25519_key\nHostKey /etc/ssh/keys/ssh_host_rsa_key\nHostKey /etc/ssh/keys/ssh_host_ecdsa_key\nKbdInteractiveAuthentication no\nAllowUsers agent\n' >> /etc/ssh/sshd_config
 
-# --- Workspace (will be mounted as a named volume at runtime) ---
-RUN mkdir -p /workspace && chown agent:agent /workspace
-
-# --- SSH sessions land in /workspace, not /home/agent ---
-# /home/agent still holds ~/.claude, ~/.gitconfig, ~/.ssh — only the cwd moves.
-# /etc/profile.d/*.sh runs for login shells (SSH default); /etc/bash.bashrc
-# covers interactive non-login shells (e.g. `docker exec -it ... bash`).
-RUN printf 'cd /workspace 2>/dev/null || true\n' > /etc/profile.d/zz-agent-workdir.sh \
-    && printf '\n# Start in /workspace for interactive shells\ncd /workspace 2>/dev/null || true\n' >> /etc/bash.bashrc
-
 # --- Claude Code default settings ---
 # Baked into /home/agent/.claude/settings.json so the first-run wizard is
 # skipped. Because /home/agent is a named volume, the file is copied into
@@ -163,5 +155,5 @@ COPY --chown=1001:1001 --chmod=0644 config/claude/settings.json /home/agent/.cla
 # --- Entrypoint ---
 COPY --chmod=0755 scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-WORKDIR /workspace
+WORKDIR /home/agent
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # Bootstrap a Ubuntu 24.04 host as a ztr-coding-agent VM.
 #
-# Idempotent — safe to re-run. Installs Docker CE + Compose, sysbox-ce
-# (pinned), registers sysbox-runc as a Docker runtime, installs Tailscale,
-# and pre-pulls the GHCR image. Optionally joins the host to your tailnet
-# with Tailscale SSH enabled (set HOST_TS_AUTHKEY before invoking).
+# Idempotent — safe to re-run. Installs Docker CE + Compose, installs
+# Tailscale, fetches the compose template + .env.example, and pre-pulls the
+# GHCR image. Optionally joins the host to your tailnet with Tailscale SSH
+# enabled (set HOST_TS_AUTHKEY before invoking, or paste when prompted).
+#
+# === Per-host isolation model ===
+#
+# This script provisions a VM intended for ONE developer's agents (typically
+# 1–3 of them). The VM is the security boundary; agents inside it run with
+# privileged Docker-in-Docker. Cross-developer separation comes from
+# running each developer on a separate VM + Tailscale ACLs — never co-tenant.
 #
 # Usage (recommended — SSH in first, then run on the host):
 #   ssh root@<host>
@@ -20,14 +27,6 @@ log() { printf '[bootstrap] %s\n' "$*" >&2; }
 
 WORKDIR="${WORKDIR:-/opt/ztr-coding-agent}"
 IMAGE="${IMAGE:-ghcr.io/zentoris-labs/ztr-coding-agent:latest}"
-
-# sysbox: built from master commit until 0.7.1 ships. All released versions
-# (≤ 0.7.0) are missing time-namespace support in sysbox-runc, breaking on
-# Docker 27.x+/containerd 2.x with `namespace {"time" ""} does not exist`.
-# Fix landed on master 2026-05-12 (sysbox-runc commit cf83133d).
-# When 0.7.1 (or whatever's next) is released, replace this with the .deb path.
-SYSBOX_COMMIT="${SYSBOX_COMMIT:-31c20d269de77ae190bd0ff8c35988af239f89d1}"
-SYSBOX_RUNC_FIX_COMMIT="cf83133d16ba775f163a5f9b841e3e2fd29c0ed0"
 
 if [[ $EUID -ne 0 ]]; then
     log "ERROR: must run as root (try: sudo bash $0)"
@@ -60,55 +59,7 @@ else
     log "docker already installed ($(docker --version))"
 fi
 
-# --- 3. sysbox-ce (built from master — see SYSBOX_COMMIT comment above) ---
-# Skip rebuild if sysbox-runc is already at the fix commit.
-if command -v sysbox-runc >/dev/null 2>&1 \
-    && sysbox-runc --version 2>&1 | grep -q "$SYSBOX_RUNC_FIX_COMMIT"; then
-    log "sysbox-runc already at fix commit ${SYSBOX_RUNC_FIX_COMMIT:0:8}, skipping rebuild"
-else
-    log "building sysbox from master commit ${SYSBOX_COMMIT:0:8} (5–15 min first run)"
-    apt-get install -y --no-install-recommends git make
-
-    install -d -m 0755 /opt/sysbox-build
-    if [[ ! -d /opt/sysbox-build/.git ]]; then
-        git clone --recursive https://github.com/nestybox/sysbox.git /opt/sysbox-build
-    else
-        git -C /opt/sysbox-build fetch origin
-    fi
-    cd /opt/sysbox-build
-    git checkout "$SYSBOX_COMMIT"
-    git submodule update --init --recursive
-
-    # `make sysbox` runs the build in a Docker-based builder container — no Go
-    # toolchain needed on the host. `make install` lays down binaries + systemd units.
-    make sysbox
-    make install
-
-    # Reload systemd in case unit files changed
-    systemctl daemon-reload
-    cd /
-fi
-
-# --- 4. Register sysbox-runc with Docker daemon ---
-DAEMON_JSON=/etc/docker/daemon.json
-if [[ -f "$DAEMON_JSON" ]] && grep -q sysbox-runc "$DAEMON_JSON"; then
-    log "daemon.json already registers sysbox-runc"
-else
-    log "writing daemon.json + restarting docker"
-    install -d -m 0755 /etc/docker
-    cat > "$DAEMON_JSON" <<'EOF'
-{
-  "runtimes": {
-    "sysbox-runc": {
-      "path": "/usr/bin/sysbox-runc"
-    }
-  }
-}
-EOF
-    systemctl restart docker
-fi
-
-# --- 5. Tailscale (system service on the host) ---
+# --- 3. Tailscale (system service on the host) ---
 if ! command -v tailscale >/dev/null 2>&1; then
     log "installing Tailscale"
     curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg \
@@ -143,7 +94,7 @@ else
     fi
 fi
 
-# --- 6. Working directory + repo files (compose template + .env.example) ---
+# --- 4. Working directory + repo files (compose template + .env.example) ---
 # Pulls the latest docker-compose.yml and .env.example from the public repo
 # so the operator doesn't have to scp them. Existing files are NOT overwritten
 # (so re-running bootstrap won't clobber a customized compose).
@@ -159,25 +110,26 @@ for f in docker-compose.yml .env.example; do
     fi
 done
 
-# --- 7. Pre-pull the image (public on GHCR, no auth needed) ---
+# --- 5. Pre-pull the image (public on GHCR, no auth needed) ---
 log "pulling ${IMAGE}"
 docker pull "${IMAGE}"
 
-# --- 8. Marker file ---
+# --- 6. Marker file ---
 cat > /etc/ztr-coding-agent.version <<EOF
 provisioned: yes
 bootstrap_date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-sysbox: source build at $SYSBOX_COMMIT
+model: per-host-isolation (VM is the trust boundary; privileged DinD inside)
 tailscale: $(tailscale version | head -1 || echo unknown)
 EOF
 
 log "done."
 log "next steps (all on this host, in ${WORKDIR}/):"
 log "  1. If tailscale not joined yet:  tailscale up --ssh"
-log "  2. Per developer, copy .env.example -> .env.<initials> and fill in"
-log "     their TS_AUTHKEY, GITHUB_TOKEN, ANTHROPIC_API_KEY, SSH_PASSWORD, etc."
-log "     example:  cp .env.example .env.al && nano .env.al"
-log "  3. Edit docker-compose.yml: replace 'xx' placeholders with the owner's"
-log "     initials. Duplicate the service block per agent if multiple developers."
-log "  4. docker compose up -d"
-log "  5. From any tailnet client:  ssh agent@agent-<initials>-01"
+log "  2. cp .env.example .env  &&  nano .env"
+log "     Set INITIALS, COMPOSE_PROFILES (count of agents to run; cumulative),"
+log "     TS_AUTHKEY (REUSABLE!), GITHUB_TOKEN, SSH_PASSWORD, etc."
+log "  3. docker compose up -d"
+log "     Only the slots in COMPOSE_PROFILES start. Add/remove later by"
+log "     editing COMPOSE_PROFILES and re-running 'docker compose up -d'."
+log "  4. From any tailnet client:  ssh agent@agent-<initials>-01"
+log "     (e.g. ssh agent@agent-ch-01 if INITIALS=ch)"
