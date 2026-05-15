@@ -36,6 +36,7 @@ hcloud server create --name ztr-agent-host-ch --type cpx32 \
   --image ubuntu-24.04 --location hel1 --ssh-key <your-key>
 
 # 2. Bootstrap the host (installs Docker + Tailscale, fetches compose template)
+ssh-keygen -R <ip>           # optional: clears stale known_hosts entry if Hetzner recycled the IP
 ssh root@<ip>
 curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/bootstrap.sh | bash
 # Paste the host Tailscale auth key when prompted
