@@ -76,8 +76,16 @@ systemctl enable --now tailscaled >/dev/null
 # Join the tailnet. Prefer HOST_TS_AUTHKEY env (for non-interactive runs);
 # otherwise prompt silently via /dev/tty so the key never lands in env,
 # shell history, or files.
-if tailscale status --json 2>/dev/null | grep -q '"BackendState":"Running"' ; then
-    log "tailscale already up; skipping join"
+#
+# Skip the prompt if this host has joined the tailnet before — tailscaled
+# persists identity in /var/lib/tailscale/tailscaled.state, so a non-empty
+# state file means "already onboarded" regardless of whether the daemon
+# happens to be Running / NeedsLogin / Stopped right now. The current
+# `tailscale status` is logged for visibility; recovery from auth expiry
+# is `tailscale up` on the host, not re-bootstrapping.
+if [[ -s /var/lib/tailscale/tailscaled.state ]]; then
+    log "tailscale already configured on this host; skipping join"
+    log "  current state: $(tailscale status --peers=false 2>&1 | head -1 || echo unavailable)"
 else
     if [[ -z "${HOST_TS_AUTHKEY:-}" && -r /dev/tty ]]; then
         printf '[bootstrap] paste Tailscale auth key (tag:agent-host, hidden): ' >&2
