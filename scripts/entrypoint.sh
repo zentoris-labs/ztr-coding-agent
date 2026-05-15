@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Runs as PID 1 in the container. Sequence:
 #   1. Generate SSH host keys if missing (persisted via the ssh-keys volume)
-#   2. Install authorized_keys from $SSH_AUTHORIZED_KEYS env (if set)
-#   3. Export whitelisted env to /etc/environment so SSH sessions see it
-#   4. Wire up git author identity + HTTPS credentials
-#   5. Optional password auth (SSH_PASSWORD; fine because sshd is tailnet-only)
-#   6. Optional in-container Docker daemon (AGENT_ENABLE_DOCKER=1; needs sysbox-runc outside)
-#   7. Optional repo auto-clone (AGENT_REPOS)
-#   8. Start tailscaled and join the tailnet (sshd is reachable only via the tailnet)
-#   9. Start sshd in the foreground; container exits if either tailscaled or sshd dies
+#   2. Export whitelisted env to /etc/environment so SSH sessions see it
+#   3. Wire up git author identity + HTTPS credentials
+#   4. Set SSH password (SSH_PASSWORD; required — sshd is tailnet-only,
+#      and Claude Code Desktop can't use key auth cleanly per issue #25661)
+#   5. In-container Docker daemon (on by default; AGENT_ENABLE_DOCKER=0 to skip; needs `privileged: true` in compose)
+#   6. Optional repo auto-clone (AGENT_REPOS)
+#   7. Start tailscaled and join the tailnet (sshd is reachable only via the tailnet)
+#   8. Start sshd in the foreground; container exits if either tailscaled or sshd dies
 #
 # Claude Code defaults (~/.claude/settings.json) are baked into the image —
 # see config/claude/settings.json in the repo. The named volume on /home/agent
@@ -30,17 +30,7 @@ for type in ed25519 rsa ecdsa; do
     chmod 644 "$key.pub"
 done
 
-# --- 2. authorized_keys: write from SSH_AUTHORIZED_KEYS env var ---
-# One key per line. For multiple keys, separate with literal \n in .env.
-install -d -o agent -g agent -m 0700 /home/agent/.ssh
-if [[ -n "${SSH_AUTHORIZED_KEYS:-}" ]]; then
-    printf '%b\n' "$SSH_AUTHORIZED_KEYS" > /home/agent/.ssh/authorized_keys
-    chown agent:agent /home/agent/.ssh/authorized_keys
-    chmod 0600        /home/agent/.ssh/authorized_keys
-    log "installed authorized_keys ($(grep -c . /home/agent/.ssh/authorized_keys) key(s))"
-fi
-
-# --- 3. Export whitelisted env to /etc/environment ---
+# --- 2. Export whitelisted env to /etc/environment ---
 # pam_env reads /etc/environment on login; sshd otherwise strips most container env.
 {
     echo "# Managed by entrypoint.sh — do not edit"
@@ -53,7 +43,7 @@ fi
 } > /etc/environment
 chmod 0644 /etc/environment
 
-# --- 4. Git credentials + author identity (as `agent` user) ---
+# --- 3. Git credentials + author identity (as `agent` user) ---
 if [[ -n "${GITHUB_TOKEN:-}" ]]; then
     log "configuring git credentials for agent user"
     runuser -u agent -- bash -c '
@@ -75,20 +65,23 @@ runuser -u agent -- git config --global --get init.defaultBranch >/dev/null 2>&1
 runuser -u agent -- git config --global --get pull.rebase >/dev/null 2>&1 \
     || runuser -u agent -- git config --global pull.rebase false
 
-# --- 5. Optional password auth ---
-# Fine on tailnet-only sshd: the network layer is already authenticated by
-# Tailscale identity, so password is a defense-in-depth second factor (not
-# the only line). Useful because Claude Code Desktop's SSH connector
-# currently can't use SSH keys cleanly (github.com/anthropics/claude-code/issues/25661).
-if [[ -n "${SSH_PASSWORD:-}" ]]; then
-    log "enabling SSH password auth (defense-in-depth over Tailscale)"
-    echo "agent:${SSH_PASSWORD}" | chpasswd
-    sed -i 's/^PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-    sed -i 's/^KbdInteractiveAuthentication .*/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config
+# --- 4. SSH password auth ---
+# Tailnet-only sshd: Tailscale identity gates network reach; password gates
+# shell. This is the ONLY supported SSH auth method — key auth was removed
+# because Claude Code Desktop's SSH connector can't use keys cleanly
+# (github.com/anthropics/claude-code/issues/25661). Fine because the network
+# layer is already authenticated.
+if [[ -z "${SSH_PASSWORD:-}" ]]; then
+    log "ERROR: SSH_PASSWORD not set — agent would be unreachable. Set it in .env on the host."
+    exit 1
 fi
+log "enabling SSH password auth"
+echo "agent:${SSH_PASSWORD}" | chpasswd
+sed -i 's/^PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+sed -i 's/^KbdInteractiveAuthentication .*/KbdInteractiveAuthentication yes/' /etc/ssh/sshd_config
 
-# --- 6. Optional in-container Docker daemon ---
-if [[ "${AGENT_ENABLE_DOCKER:-}" == "1" ]]; then
+# --- 5. In-container Docker daemon (on by default; set AGENT_ENABLE_DOCKER=0 to skip) ---
+if [[ "${AGENT_ENABLE_DOCKER:-1}" != "0" ]]; then
     log "starting Docker daemon"
     nohup dockerd >/tmp/dockerd.log 2>&1 &
     DOCKERD_PID=$!
@@ -102,11 +95,11 @@ if [[ "${AGENT_ENABLE_DOCKER:-}" == "1" ]]; then
         sleep 0.5
     done
     if ! kill -0 "$DOCKERD_PID" 2>/dev/null; then
-        log "ERROR: dockerd exited during startup — host needs sysbox-runc. See /tmp/dockerd.log."
+        log "ERROR: dockerd exited during startup — container needs 'privileged: true' in compose. See /tmp/dockerd.log."
     fi
 fi
 
-# --- 7. Optional repo auto-clone ---
+# --- 6. Optional repo auto-clone ---
 if [[ -n "${AGENT_REPOS:-}" ]]; then
     log "auto-cloning configured repos"
     for repo in $AGENT_REPOS; do
@@ -117,7 +110,7 @@ if [[ -n "${AGENT_REPOS:-}" ]]; then
         esac
         name="${repo##*/}"
         name="${name%.git}"
-        dest="/workspace/$name"
+        dest="/home/agent/$name"
         if [[ -d "$dest/.git" ]]; then
             log "  $name: already present, skipping"
         else
@@ -129,9 +122,9 @@ if [[ -n "${AGENT_REPOS:-}" ]]; then
     done
 fi
 
-# --- 8. Tailscale (network overlay; no `--ssh` so plain sshd handles auth) ---
+# --- 7. Tailscale (network overlay; no `--ssh` so plain sshd handles auth) ---
 if [[ -z "${TS_AUTHKEY:-}" ]]; then
-    log "ERROR: TS_AUTHKEY not set — agent has no inbound network. Set TS_AUTHKEY in .env.<initials>."
+    log "ERROR: TS_AUTHKEY not set — agent has no inbound network. Set TS_AUTHKEY in .env on the host."
     exit 1
 fi
 
@@ -163,7 +156,7 @@ tailscale --socket=/var/run/tailscale/tailscaled.sock up \
     --accept-routes \
     || { log "ERROR: tailscale up failed"; exit 1; }
 
-# --- 9. Start sshd. Container exits if either tailscaled or sshd dies. ---
+# --- 8. Start sshd. Container exits if either tailscaled or sshd dies. ---
 log "ready (agent=${AGENT_ID:-unset}); tailnet=$TS_HOSTNAME"
 log "starting sshd"
 /usr/sbin/sshd -D -e &
