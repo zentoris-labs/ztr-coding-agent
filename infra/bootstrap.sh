@@ -77,13 +77,13 @@ systemctl enable --now tailscaled >/dev/null
 # otherwise prompt silently via /dev/tty so the key never lands in env,
 # shell history, or files.
 #
-# Skip the prompt if this host has joined the tailnet before — tailscaled
-# persists identity in /var/lib/tailscale/tailscaled.state, so a non-empty
-# state file means "already onboarded" regardless of whether the daemon
-# happens to be Running / NeedsLogin / Stopped right now. The current
-# `tailscale status` is logged for visibility; recovery from auth expiry
-# is `tailscale up` on the host, not re-bootstrapping.
-if [[ -s /var/lib/tailscale/tailscaled.state ]]; then
+# Skip the prompt if tailscaled already holds a node key (this host joined
+# a tailnet before). `HaveNodeKey` is the daemon's authoritative signal —
+# set on first successful login, cleared only by explicit `tailscale logout`,
+# and unaffected by auth-key expiry or daemon restarts. The current status
+# is logged for visibility; recovery from auth expiry is `tailscale up` on
+# the host, not re-bootstrapping.
+if [[ "$(tailscale status --json 2>/dev/null | jq -r '.HaveNodeKey // false')" == "true" ]]; then
     log "tailscale already configured on this host; skipping join"
     log "  current state: $(tailscale status --peers=false 2>&1 | head -1 || echo unavailable)"
 else
