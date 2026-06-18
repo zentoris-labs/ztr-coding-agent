@@ -1,0 +1,74 @@
+#cloud-config
+# Multipass provisioning for a single-developer Claude Code dev VM.
+#
+# Model: the VM is the trust boundary (one developer, disposable box). Docker
+# runs natively and the default `ubuntu` user is in the docker group — simple,
+# since there's nothing else on this VM to protect from the agent. The real
+# perimeter is OUTSIDE this file: keep only SCOPED, revocable creds in here
+# (a repo-scoped git token, a least-priv cloud role) — NEVER your Windows admin
+# sessions, and never log into an admin console from inside this VM.
+#
+# Launch (from anywhere; point --cloud-init at this file):
+#   multipass launch 24.04 --name agent --cpus 4 --memory 8G --disk 60G \
+#     --cloud-init <path-to-this-file>
+#   multipass exec agent -- cloud-init status --wait   # block until provisioning done
+#   multipass shell agent
+#
+# This file is PURE TOOLCHAIN — no secrets, no env vars — so it's safe to commit
+# to the public repo. Credentials are added interactively AFTER launch:
+#   sudo tailscale up --ssh   # join the tailnet (manual login)
+#   gh auth login             # GitHub: paste a scoped + expiring PAT
+#   claude                    # authenticate Claude Code
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - git
+  - git-lfs
+  - curl
+  - wget
+  - ca-certificates
+  - gnupg
+  - build-essential
+  - jq
+  - ripgrep
+  - fd-find
+  - tmux
+  - htop
+  - unzip
+  - unattended-upgrades
+
+runcmd:
+  # --- Node.js (current LTS) ---
+  - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  - apt-get install -y nodejs
+
+  # --- GitHub CLI (gh) — auth is done manually post-launch via `gh auth login` ---
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  - chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
+  - apt-get update
+  - apt-get install -y gh
+
+  # --- Claude Code (system-wide; auth stored per-user in ~/.claude) ---
+  - npm install -g @anthropic-ai/claude-code
+
+  # --- .NET 10 SDK (system-wide) ---
+  - curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+  - bash /tmp/dotnet-install.sh --channel 10.0 --install-dir /usr/share/dotnet
+  - ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
+  - printf 'export DOTNET_ROOT=/usr/share/dotnet\nexport DOTNET_CLI_TELEMETRY_OPTOUT=1\n' > /etc/profile.d/dotnet.sh
+
+  # --- Docker (native daemon) ---
+  - curl -fsSL https://get.docker.com | sh
+  - usermod -aG docker ubuntu
+
+  # --- Tailscale (installed; join manually with `sudo tailscale up --ssh`) ---
+  - curl -fsSL https://tailscale.com/install.sh | sh
+
+  # --- Automatic security updates ---
+  - dpkg-reconfigure -f noninteractive unattended-upgrades
+
+final_message: "Provisioning complete. Manual steps (no secrets baked in): 'sudo tailscale up --ssh', then 'gh auth login', then 'claude'."
