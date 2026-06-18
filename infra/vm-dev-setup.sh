@@ -2,6 +2,10 @@
 # Provision a fresh Ubuntu 24.04 Server VM as a single-developer Claude Code
 # dev box, with Docker running NATIVELY on the VM (no container layer).
 #
+# NOTE: For the lower-friction local setup, prefer `infra/multipass-cloud-init.yaml`
+# (Multipass — sane defaults, coexists with Docker Desktop). This script remains
+# the provisioner for a hand-built Hyper-V or bare Ubuntu VM.
+#
 # === How this differs from the container image ===
 #
 # The GHCR image runs dockerd *inside* a container, which is why it needs
