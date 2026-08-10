@@ -168,5 +168,5 @@ systemctl enable --now avahi-daemon >/dev/null
 log "done."
 log "  reach it:   ssh ${TARGET_USER}@$(hostname).local"
 log "  docker:     log out/in once so '${TARGET_USER}' picks up the docker group"
-log "  claude:     run 'claude' as ${TARGET_USER} and authenticate"
+log "  claude:     no in-VM login needed — Claude Code runs on your host and connects over SSH"
 log "  verify:     docker run --rm hello-world && dotnet --info && node -v"

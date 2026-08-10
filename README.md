@@ -104,6 +104,7 @@ docker-compose.yml              # 20 agent slots (cumulative profile-gated) for 
 .env.example                    # env contract
 infra/bootstrap.sh              # host setup script (Docker + Tailscale)
 docs/tailscale.md               # Tailscale ACL + auth keys + teammate onboarding
+docs/agent-vm-setup.md          # Multipass agent VM post-launch runbook (Tailscale, gh, repo clone)
 .github/workflows/              # CI → ghcr.io/zentoris-labs/ztr-coding-agent
 AGENTS.md / CLAUDE.md           # instructions for AI agents working on this repo
 ```

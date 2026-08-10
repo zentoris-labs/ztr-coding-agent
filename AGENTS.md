@@ -59,6 +59,7 @@ ztr-coding-agent/
 ├── .env.example                     # full env contract — every variable documented
 ├── infra/bootstrap.sh               # idempotent host setup (Docker CE + Tailscale)
 ├── docs/tailscale.md                # Tailscale ACL + auth keys (one-time setup)
+├── docs/agent-vm-setup.md           # Multipass agent VM post-launch runbook (Tailscale, gh, repo clone)
 ├── .github/workflows/build-and-push.yml  # CI → ghcr.io/zentoris-labs/ztr-coding-agent
 ├── .claude/settings.json            # project-level Claude Code settings (for contributors)
 └── README.md                        # project overview

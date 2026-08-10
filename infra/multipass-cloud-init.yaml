@@ -15,10 +15,19 @@
 #   multipass shell agent
 #
 # This file is PURE TOOLCHAIN — no secrets, no env vars — so it's safe to commit
-# to the public repo. Credentials are added interactively AFTER launch:
-#   sudo tailscale up --ssh   # join the tailnet (manual login)
-#   gh auth login             # GitHub: paste a scoped + expiring PAT
-#   claude                    # authenticate Claude Code
+# to the public repo. Credentials are added AFTER launch — two steps:
+#   # 1. Join the tailnet with a reusable agent auth key (tag:agent-<initials>;
+#   #    generate one per docs/tailscale.md § 2). --ssh enables Tailscale SSH so
+#   #    your host machine can reach in.
+#   sudo tailscale up --ssh --auth-key=tskey-auth-xxxxxxxxxxxx
+#   # 2. GitHub: authenticate gh with a scoped, expiring PAT.
+#   gh auth login --with-token < token.txt   # or run `gh auth login` and paste it
+#
+# There is NO `claude` login step: Claude Code runs on your HOST machine and
+# drives the VM over (Tailscale) SSH, so the agent box never needs its own
+# authenticated Claude session — only the toolchain + tailnet reachability.
+#
+# Full human runbook (these steps + repo cloning): docs/agent-vm-setup.md
 
 package_update: true
 package_upgrade: true
@@ -71,4 +80,4 @@ runcmd:
   # --- Automatic security updates ---
   - dpkg-reconfigure -f noninteractive unattended-upgrades
 
-final_message: "Provisioning complete. Manual steps (no secrets baked in): 'sudo tailscale up --ssh', then 'gh auth login', then 'claude'."
+final_message: "Provisioning complete. Two post-launch steps (no secrets baked in): 1) join the tailnet -- 'sudo tailscale up --ssh --auth-key=tskey-auth-...', 2) GitHub -- 'gh auth login' with a scoped PAT. No 'claude' login: Claude Code runs on the host and connects in over (Tailscale) SSH."
