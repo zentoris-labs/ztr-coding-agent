@@ -50,6 +50,27 @@ packages:
   - htop
   - unzip
   - unattended-upgrades
+  - xvfb            # virtual display for the headed-browser fallback (see runcmd)
+
+# Agent browser guidance — loaded by Claude Code every session (user-level, so it
+# applies in every repo the agent opens). Steers agents to headless Chromium via
+# the Playwright MCP instead of the Claude-in-Chrome extension (no desktop Chrome
+# exists in this VM). Generic on purpose — no per-host URLs.
+write_files:
+  - path: /home/ubuntu/.claude/CLAUDE.md
+    owner: ubuntu:ubuntu
+    permissions: '0644'
+    content: |
+      ## Browser / screenshots — this is a headless VM
+
+      This machine has NO desktop Chrome and NO Claude browser extension. Do not
+      use the Claude-in-Chrome tools and never report that you "can't take a
+      screenshot."
+
+      For any browser task — screenshots, layout/alignment checks, clicking a
+      dropdown, confirming a page renders — use the Playwright MCP (headless
+      Chromium) against the app's URL. Chromium + deps are installed. If a site
+      blocks headless, run it headed under Xvfb (`xvfb-run`).
 
 runcmd:
   # --- Node.js (current LTS) ---
@@ -81,6 +102,14 @@ runcmd:
   # Installs /usr/bin/netbird and starts the `netbird` systemd daemon; the peer
   # joins the mesh only when you run `netbird up --setup-key ...` (see header).
   - curl -fsSL https://pkgs.netbird.io/install.sh | sh
+
+  # --- Headless browser for agents (Playwright + Chromium; Xvfb for headed) ---
+  # Agents run in this GUI-less VM, so browser work (screenshots, UI checks) goes
+  # through headless Chromium via the Playwright MCP — NOT the Claude-in-Chrome
+  # extension (no desktop Chrome here). See README "Browser / screenshots".
+  - npx --yes playwright@latest install-deps chromium
+  - runuser -l ubuntu -c 'npx --yes playwright@latest install chromium'
+  - runuser -l ubuntu -c 'claude mcp add --scope user playwright -- npx -y @playwright/mcp@latest'
 
   # --- Automatic security updates ---
   - dpkg-reconfigure -f noninteractive unattended-upgrades

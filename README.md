@@ -176,6 +176,35 @@ other and teammates can't reach yours. Each teammate provisions **their own** VM
 
 ---
 
+## Browser / screenshots (for agents)
+
+Agents run in a GUI-less VM, so browser work goes through **headless Chromium**,
+not the Claude-in-Chrome extension (there's no desktop Chrome here). The cloud-init
+provisions this automatically:
+
+- Chromium + its system deps (`playwright install --with-deps chromium`) and
+  `xvfb` for the headed fallback.
+- The **Playwright MCP** registered for `ubuntu` at user scope, so every repo the
+  agent opens has `navigate` / `screenshot` / `click` tools.
+- A user-level `~/.claude/CLAUDE.md` telling agents to use Playwright for any
+  browser task and never to report "no Chrome connected."
+
+So an agent can screenshot your dev app (e.g. over its NetBird URL) on its own.
+Verify the MCP is live in the VM with `claude mcp list` → `playwright ✓ connected`;
+if it's missing (a cloud-init `runcmd` can fail silently), register it by hand:
+
+```bash
+claude mcp add --scope user playwright -- npx -y @playwright/mcp@latest
+```
+
+If a site blocks headless, run it headed on the virtual display:
+
+```bash
+xvfb-run -a npx playwright test --headed
+```
+
+---
+
 ## Troubleshooting
 
 ### `node -v` shows v18, or `claude` is missing
@@ -225,7 +254,7 @@ NetBird and Tailscale coexist while both are up (separate interfaces `wt0` vs
 ## Layout
 
 ```
-infra/multipass-cloud-init.yaml   # the VM image: pure toolchain (Node, .NET, Docker, Claude Code, gh, NetBird)
+infra/multipass-cloud-init.yaml   # the VM image: pure toolchain (Node, .NET, Docker, Claude Code, gh, NetBird, Playwright/Chromium)
 README.md                         # this file — the full VM setup guide
 AGENTS.md / CLAUDE.md             # instructions for AI agents working on this repo
 obsolete/                         # retired container-fleet model (Dockerfile, compose, entrypoint, CI, Tailscale docs)
