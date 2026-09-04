@@ -38,7 +38,7 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
     ca-certificates curl wget gnupg lsb-release unattended-upgrades \
     git git-lfs \
-    build-essential pkg-config \
+    build-essential pkg-config cmake \
     jq ripgrep fd-find fzf tree \
     tmux htop vim nano less openssl \
     unzip zip \
@@ -51,6 +51,17 @@ apt-get install -y --no-install-recommends \
 git lfs install --system >/dev/null 2>&1 || true
 runuser -l "$TARGET_USER" -c 'pipx ensurepath >/dev/null 2>&1 || true'
 
+# Python project managers: pip/venv are already present; add Poetry + uv (via
+# pipx, isolated) for repos that use those lockfiles. install-or-upgrade, so a
+# re-run keeps them current. Non-fatal.
+for tool in poetry uv; do
+    if runuser -l "$TARGET_USER" -c "pipx install $tool >/dev/null 2>&1 || pipx upgrade $tool >/dev/null 2>&1"; then
+        log "python tool ready: $tool"
+    else
+        log "WARN: pipx $tool failed (re-run to retry)"
+    fi
+done
+
 # --- 2. Node.js (current LTS via NodeSource) ---
 if ! command -v node >/dev/null 2>&1; then
     log "installing Node.js (LTS)"
@@ -59,6 +70,9 @@ if ! command -v node >/dev/null 2>&1; then
 else
     log "node present ($(node -v))"
 fi
+# Enable corepack so pnpm/yarn are available on demand for repos that pin them
+# (ships with Node; costs nothing until used).
+corepack enable 2>/dev/null || log "WARN: corepack enable failed (Node too old?)"
 
 # --- 3. GitHub CLI ---
 if ! command -v gh >/dev/null 2>&1; then

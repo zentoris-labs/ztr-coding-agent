@@ -23,10 +23,11 @@ over [NetBird](https://netbird.io) by name (`ztr-agent-<initials>-<NN>`).
   Everything credential-shaped is added by hand after launch, so both files are
   safe to commit.
 
-**What's on the VM:** Node.js (LTS), .NET (10 SDK), Python 3.12 (+ pip/venv/pipx),
-Go (latest), Java (OpenJDK 21), Docker, the NetBird client, Claude Code, `gh`,
-Playwright + Chromium, and a dev CLI baseline (`jq`, `ripgrep`, `fd`, `fzf`,
-`shellcheck`, `postgresql-client`, `redis-tools`, `sqlite3`, `xvfb`, …).
+**What's on the VM:** Node.js (LTS, with `corepack` for pnpm/yarn), .NET (10 SDK),
+Python 3.12 (pip/venv/pipx + Poetry + uv), Go (latest), Java (OpenJDK 21), Docker,
+the NetBird client, Claude Code, `gh`, Playwright + Chromium, and a dev CLI +
+build baseline (`cmake`, `jq`, `ripgrep`, `fd`, `fzf`, `shellcheck`,
+`postgresql-client`, `redis-tools`, `sqlite3`, `xvfb`, …).
 
 > The older **container-fleet** model (a GHCR image + `docker compose` running 20
 > agent containers behind Tailscale) has been retired to [`obsolete/`](obsolete/).
