@@ -15,19 +15,22 @@
 #   multipass shell agent
 #
 # This file is PURE TOOLCHAIN — no secrets, no env vars — so it's safe to commit
-# to the public repo. Credentials are added AFTER launch — two steps:
-#   # 1. Join the tailnet with a reusable agent auth key (tag:agent-<initials>;
-#   #    generate one per docs/tailscale.md § 2). --ssh enables Tailscale SSH so
-#   #    your host machine can reach in.
-#   sudo tailscale up --ssh --auth-key=tskey-auth-xxxxxxxxxxxx
-#   # 2. GitHub: authenticate gh with a scoped, expiring PAT.
+# to the public repo. Credentials/keys are added AFTER launch, all manual (full
+# runbook: README.md):
+#   # 1. Join NetBird for reachability + DNS (so the VM resolves by its hostname,
+#   #    ztr-agent-<initials>-<NN>). Reusable setup key per README, "NetBird setup".
+#   #    NOTE: no --allow-server-ssh — SSH is plain OpenSSH + your key (step 2).
+#   sudo netbird up --setup-key=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+#   # 2. SSH key: append your host's PUBLIC key to ~/.ssh/authorized_keys so you
+#   #    can `ssh ubuntu@<hostname>` with your default key (README, quick start step 2).
+#   # 3. GitHub: authenticate gh with a scoped, expiring PAT.
 #   gh auth login --with-token < token.txt   # or run `gh auth login` and paste it
 #
 # There is NO `claude` login step: Claude Code runs on your HOST machine and
-# drives the VM over (Tailscale) SSH, so the agent box never needs its own
-# authenticated Claude session — only the toolchain + tailnet reachability.
+# drives the VM over SSH, so the agent box never needs its own authenticated
+# Claude session — only the toolchain + NetBird reachability.
 #
-# Full human runbook (these steps + repo cloning): docs/agent-vm-setup.md
+# Full human runbook (these steps + repo cloning): README.md
 
 package_update: true
 package_upgrade: true
@@ -74,10 +77,12 @@ runcmd:
   - curl -fsSL https://get.docker.com | sh
   - usermod -aG docker ubuntu
 
-  # --- Tailscale (installed; join manually with `sudo tailscale up --ssh`) ---
-  - curl -fsSL https://tailscale.com/install.sh | sh
+  # --- NetBird (installed; join manually post-launch with `sudo netbird up`) ---
+  # Installs /usr/bin/netbird and starts the `netbird` systemd daemon; the peer
+  # joins the mesh only when you run `netbird up --setup-key ...` (see header).
+  - curl -fsSL https://pkgs.netbird.io/install.sh | sh
 
   # --- Automatic security updates ---
   - dpkg-reconfigure -f noninteractive unattended-upgrades
 
-final_message: "Provisioning complete. Two post-launch steps (no secrets baked in): 1) join the tailnet -- 'sudo tailscale up --ssh --auth-key=tskey-auth-...', 2) GitHub -- 'gh auth login' with a scoped PAT. No 'claude' login: Claude Code runs on the host and connects in over (Tailscale) SSH."
+final_message: "Provisioning complete. Post-launch, all manual (no secrets baked in): 1) join NetBird for DNS -- 'sudo netbird up --setup-key=<KEY>', 2) add your SSH public key to ~/.ssh/authorized_keys, 3) GitHub -- 'gh auth login'. Then 'ssh ubuntu@<hostname>'. Full runbook: README.md."
