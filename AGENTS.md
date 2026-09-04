@@ -15,10 +15,14 @@ at the bottom of this file.
 developer's own machine, reachable over NetBird by hostname. The whole active
 surface is small:
 
-- `infra/multipass-cloud-init.yaml` — the VM image as **pure toolchain** (Node,
-  .NET, Docker, Claude Code, gh, the NetBird client). No secrets, no env vars.
+- `infra/provision.sh` — the **single, idempotent source of truth** for the VM
+  toolchain (Node, .NET, Python, Go, Java, Docker, NetBird, Claude Code, gh,
+  Playwright, dev CLIs). Runs at first boot and is re-run to update existing VMs.
+  Pure toolchain — no secrets.
+- `infra/multipass-cloud-init.yaml` — thin first-boot config that just fetches and
+  runs `provision.sh`.
 - `README.md` — the single end-to-end setup guide (launch, NetBird, SSH key, gh,
-  clone, verify, troubleshooting).
+  clone, verify, updating the toolchain, troubleshooting).
 
 **Security model:** the **VM is the trust boundary**. Docker runs natively inside
 it and the agent is root-equivalent there — fine, because one developer owns the
@@ -62,7 +66,8 @@ If you discover a secret already in git history, **stop**. Tell the human operat
 
 ```
 ztr-coding-agent/
-├── infra/multipass-cloud-init.yaml   # the VM image: pure toolchain, no secrets
+├── infra/provision.sh                # idempotent toolchain installer — source of truth
+├── infra/multipass-cloud-init.yaml   # first-boot config: fetches + runs provision.sh
 ├── README.md                         # the single VM setup guide
 ├── AGENTS.md / CLAUDE.md             # instructions for AI agents on this repo
 ├── .claude/settings.json             # project-level Claude Code settings (for contributors)
@@ -107,8 +112,9 @@ per host/operator lives outside this repo.
 
 ## Validating changes
 
-There's no build. For a change to the cloud-init:
+There's no build. For a toolchain change:
 
+- **Lint the script** — `shellcheck infra/provision.sh` (it's the main surface now).
 - **Lint the YAML** (`cloud-init schema --config-file infra/multipass-cloud-init.yaml`
   if you have cloud-init locally, or any YAML linter).
 - **Smoke test** by launching a throwaway VM:

@@ -4,7 +4,7 @@
 # Model: the VM is the trust boundary (one developer, disposable box). Docker
 # runs natively and the default `ubuntu` user is in the docker group — simple,
 # since there's nothing else on this VM to protect from the agent. The real
-# perimeter is OUTSIDE this file: keep only SCOPED, revocable creds in here
+# perimeter is OUTSIDE this file: keep only SCOPED, revocable creds on the VM
 # (a repo-scoped git token, a least-priv cloud role) — NEVER your Windows admin
 # sessions, and never log into an admin console from inside this VM.
 #
@@ -14,12 +14,15 @@
 #   multipass exec agent -- cloud-init status --wait   # block until provisioning done
 #   multipass shell agent
 #
-# This file is PURE TOOLCHAIN — no secrets, no env vars — so it's safe to commit
-# to the public repo. Credentials/keys are added AFTER launch, all manual (full
-# runbook: README.md):
-#   # 1. Join NetBird for reachability + DNS (so the VM resolves by its hostname,
-#   #    ztr-agent-<initials>-<NN>). Reusable setup key per README, "NetBird setup".
-#   #    NOTE: no --allow-server-ssh — SSH is plain OpenSSH + your key (step 2).
+# The toolchain lives in infra/provision.sh (the single source of truth); this
+# file just fetches and runs it at first boot. To ADD or UPDATE tools on an
+# existing VM, re-run that same script — see README "Updating the toolchain".
+#
+# PURE TOOLCHAIN — no secrets, no env vars — safe to commit. Credentials/keys are
+# added AFTER launch, all manual (full runbook: README.md):
+#   # 1. Join NetBird for reachability + DNS (VM resolves as ztr-agent-<initials>-<NN>).
+#   #    Reusable setup key per README, "NetBird setup". No --allow-server-ssh —
+#   #    SSH is plain OpenSSH + your key (step 2).
 #   sudo netbird up --setup-key=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
 #   # 2. SSH key: append your host's PUBLIC key to ~/.ssh/authorized_keys so you
 #   #    can `ssh ubuntu@<hostname>` with your default key (README, quick start step 2).
@@ -29,89 +32,18 @@
 # There is NO `claude` login step: Claude Code runs on your HOST machine and
 # drives the VM over SSH, so the agent box never needs its own authenticated
 # Claude session — only the toolchain + NetBird reachability.
-#
-# Full human runbook (these steps + repo cloning): README.md
 
 package_update: true
 package_upgrade: true
 
 packages:
-  - git
-  - git-lfs
   - curl
-  - wget
   - ca-certificates
-  - gnupg
-  - build-essential
-  - jq
-  - ripgrep
-  - fd-find
-  - tmux
-  - htop
-  - unzip
-  - unattended-upgrades
-  - xvfb            # virtual display for the headed-browser fallback (see runcmd)
-
-# Agent browser guidance — loaded by Claude Code every session (user-level, so it
-# applies in every repo the agent opens). Steers agents to headless Chromium via
-# the Playwright MCP instead of the Claude-in-Chrome extension (no desktop Chrome
-# exists in this VM). Generic on purpose — no per-host URLs.
-write_files:
-  - path: /home/ubuntu/.claude/CLAUDE.md
-    owner: ubuntu:ubuntu
-    permissions: '0644'
-    content: |
-      ## Browser / screenshots — this is a headless VM
-
-      This machine has NO desktop Chrome and NO Claude browser extension. Do not
-      use the Claude-in-Chrome tools and never report that you "can't take a
-      screenshot."
-
-      For any browser task — screenshots, layout/alignment checks, clicking a
-      dropdown, confirming a page renders — use the Playwright MCP (headless
-      Chromium) against the app's URL. Chromium + deps are installed. If a site
-      blocks headless, run it headed under Xvfb (`xvfb-run`).
 
 runcmd:
-  # --- Node.js (current LTS) ---
-  - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
-  - apt-get install -y nodejs
+  # Provision the full dev toolchain via the single source of truth (idempotent).
+  # Pinned to `main`; the repo is public so the raw fetch needs no auth.
+  - curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/provision.sh -o /tmp/provision.sh
+  - bash /tmp/provision.sh
 
-  # --- GitHub CLI (gh) — auth is done manually post-launch via `gh auth login` ---
-  - install -m 0755 -d /etc/apt/keyrings
-  - curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
-  - chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
-  - apt-get update
-  - apt-get install -y gh
-
-  # --- Claude Code (system-wide; auth stored per-user in ~/.claude) ---
-  - npm install -g @anthropic-ai/claude-code
-
-  # --- .NET 10 SDK (system-wide) ---
-  - curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
-  - bash /tmp/dotnet-install.sh --channel 10.0 --install-dir /usr/share/dotnet
-  - ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
-  - printf 'export DOTNET_ROOT=/usr/share/dotnet\nexport DOTNET_CLI_TELEMETRY_OPTOUT=1\n' > /etc/profile.d/dotnet.sh
-
-  # --- Docker (native daemon) ---
-  - curl -fsSL https://get.docker.com | sh
-  - usermod -aG docker ubuntu
-
-  # --- NetBird (installed; join manually post-launch with `sudo netbird up`) ---
-  # Installs /usr/bin/netbird and starts the `netbird` systemd daemon; the peer
-  # joins the mesh only when you run `netbird up --setup-key ...` (see header).
-  - curl -fsSL https://pkgs.netbird.io/install.sh | sh
-
-  # --- Headless browser for agents (Playwright + Chromium; Xvfb for headed) ---
-  # Agents run in this GUI-less VM, so browser work (screenshots, UI checks) goes
-  # through headless Chromium via the Playwright MCP — NOT the Claude-in-Chrome
-  # extension (no desktop Chrome here). See README "Browser / screenshots".
-  - npx --yes playwright@latest install-deps chromium
-  - runuser -l ubuntu -c 'npx --yes playwright@latest install chromium'
-  - runuser -l ubuntu -c 'claude mcp add --scope user playwright -- npx -y @playwright/mcp@latest'
-
-  # --- Automatic security updates ---
-  - dpkg-reconfigure -f noninteractive unattended-upgrades
-
-final_message: "Provisioning complete. Post-launch, all manual (no secrets baked in): 1) join NetBird for DNS -- 'sudo netbird up --setup-key=<KEY>', 2) add your SSH public key to ~/.ssh/authorized_keys, 3) GitHub -- 'gh auth login'. Then 'ssh ubuntu@<hostname>'. Full runbook: README.md."
+final_message: "Provisioning complete (toolchain via infra/provision.sh). Post-launch, all manual (no secrets baked in): 1) join NetBird for DNS -- 'sudo netbird up --setup-key=<KEY>', 2) add your SSH public key to ~/.ssh/authorized_keys, 3) GitHub -- 'gh auth login'. Then 'ssh ubuntu@<hostname>'. Full runbook: README.md."

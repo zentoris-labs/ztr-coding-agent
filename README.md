@@ -15,9 +15,18 @@ over [NetBird](https://netbird.io) by name (`ztr-agent-<initials>-<NN>`).
   for Windows `ssh` clients).
 - **Claude Code runs on your host** and drives the VM over SSH. There is **no
   `claude` login inside the VM** — only the toolchain + NetBird reachability.
-- **The cloud-init ([`infra/multipass-cloud-init.yaml`](infra/multipass-cloud-init.yaml))
-  is pure toolchain** — no secrets. Everything credential-shaped is added by hand
-  after launch (below), so the file is safe to commit.
+- **Pure toolchain, no secrets.** The cloud-init
+  ([`infra/multipass-cloud-init.yaml`](infra/multipass-cloud-init.yaml)) just runs
+  [`infra/provision.sh`](infra/provision.sh) — the single, idempotent source of
+  truth for the toolchain. Re-run that script to add/update tools on VMs that
+  already exist (see [Updating the toolchain](#updating-the-toolchain)).
+  Everything credential-shaped is added by hand after launch, so both files are
+  safe to commit.
+
+**What's on the VM:** Node.js (LTS), .NET (10 SDK), Python 3.12 (+ pip/venv/pipx),
+Go (latest), Java (OpenJDK 21), Docker, the NetBird client, Claude Code, `gh`,
+Playwright + Chromium, and a dev CLI baseline (`jq`, `ripgrep`, `fd`, `fzf`,
+`shellcheck`, `postgresql-client`, `redis-tools`, `sqlite3`, `xvfb`, …).
 
 > The older **container-fleet** model (a GHCR image + `docker compose` running 20
 > agent containers behind Tailscale) has been retired to [`obsolete/`](obsolete/).
@@ -179,8 +188,8 @@ other and teammates can't reach yours. Each teammate provisions **their own** VM
 ## Browser / screenshots (for agents)
 
 Agents run in a GUI-less VM, so browser work goes through **headless Chromium**,
-not the Claude-in-Chrome extension (there's no desktop Chrome here). The cloud-init
-provisions this automatically:
+not the Claude-in-Chrome extension (there's no desktop Chrome here). `provision.sh`
+sets this up automatically:
 
 - Chromium + its system deps (`playwright install --with-deps chromium`) and
   `xvfb` for the headed fallback.
@@ -205,18 +214,39 @@ xvfb-run -a npx playwright test --headed
 
 ---
 
+## Updating the toolchain
+
+[`infra/provision.sh`](infra/provision.sh) is the single source of truth, and
+it's **idempotent** — re-running it adds anything missing, upgrades the apt
+packages, and refreshes Go and the browser. That's how you add today's tools to
+VMs you launched yesterday, without rebuilding them.
+
+Run it across every agent VM from the host:
+
+```powershell
+$vms = (multipass list --format csv | ConvertFrom-Csv | Where-Object { $_.Name -like 'ztr-agent-*' }).Name
+foreach ($vm in $vms) {
+    Write-Host "==> $vm"
+    multipass exec $vm -- bash -c 'curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/provision.sh | sudo bash'
+}
+```
+
+For a **new major runtime** (a newer .NET channel, a different JDK), bump the
+tunables at the top of the script (`DOTNET_CHANNEL`, `JAVA_PKG`, `GO_VERSION`)
+and re-run. OS security patches are handled continuously by `unattended-upgrades`.
+
+---
+
 ## Troubleshooting
 
-### `node -v` shows v18, or `claude` is missing
+### Toolchain looks incomplete (`node`/`claude`/`go` missing)
 
-cloud-init `runcmd` failures don't fail the boot (`cloud-init status` still says
-`done`). If the NodeSource step didn't take, the VM comes up with Ubuntu's distro
-node 18 and no npm, so `claude` never installed. Repair, in the VM:
+A cloud-init `runcmd` failure doesn't fail the boot (`cloud-init status` still says
+`done`), so a flaky network at first boot can leave the toolchain half-installed.
+The fix is just to re-run the provisioner in the VM — it's idempotent:
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash -
-sudo apt-get install -y nodejs
-sudo npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code
+curl -fsSL https://raw.githubusercontent.com/zentoris-labs/ztr-coding-agent/main/infra/provision.sh | sudo bash
 ```
 
 ### `REMOTE HOST IDENTIFICATION HAS CHANGED` after relaunching a VM
@@ -254,7 +284,8 @@ NetBird and Tailscale coexist while both are up (separate interfaces `wt0` vs
 ## Layout
 
 ```
-infra/multipass-cloud-init.yaml   # the VM image: pure toolchain (Node, .NET, Docker, Claude Code, gh, NetBird, Playwright/Chromium)
+infra/provision.sh                # idempotent toolchain installer — the single source of truth
+infra/multipass-cloud-init.yaml   # first-boot config: runs provision.sh, nothing else
 README.md                         # this file — the full VM setup guide
 AGENTS.md / CLAUDE.md             # instructions for AI agents working on this repo
 obsolete/                         # retired container-fleet model (Dockerfile, compose, entrypoint, CI, Tailscale docs)
